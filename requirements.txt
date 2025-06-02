@@ -1,0 +1,6 @@
+google-adk
+supabase
+cassio
+cassandra-driver
+python-dotenv
+astrapy
