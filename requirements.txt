@@ -4,3 +4,5 @@ cassio
 cassandra-driver
 python-dotenv
 astrapy
+pytest
+pytest-asyncio

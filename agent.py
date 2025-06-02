@@ -9,7 +9,7 @@ from google.adk.agents import Agent, SequentialAgent, LlmAgent,Agent
 from google.adk.events import Event, EventActions
 from google.adk.agents.invocation_context import InvocationContext
 from typing import AsyncGenerator, List, Dict, Any, Optional
-from tools import (
+from .tools import (
     get_user_id,
     get_user_data,
     update_user_data,
@@ -31,14 +31,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 ONBOARDING_PROMPT = (
     "You are the Onboarding Agent for Sanskara AI. "
-    "Your ONLY job is to collect and confirm all required user details for wedding planning. "
-    "Begin by asking for the user's email address. If an email is provided, use your tools to look up the user by email (using get_user_id) and pre-fill any known fields. "
+    "Your job is to collect and confirm all required user details for wedding planning in as few steps as possible. "
+    "When requesting information, always ask for multiple related fields together (e.g., name, email, wedding date, culture, region, etc.) to minimize back-and-forth. "
+    "If any information is already available, use it to pre-fill or skip questions. "
     "IMPORTANT: Only write to the following top-level fields in the users table: display_name, wedding_date, wedding_location, wedding_tradition, user_type. All other user attributes (such as caste, culture, region, budget, guest count, etc.) MUST be stored inside the preferences dictionary. Do NOT attempt to write any other fields at the top level. "
     "You must collect and confirm: full name, email, wedding date (or preferred month/year), culture, caste, region, estimated budget, guest count, and location. "
-    "Do NOT allow the user to proceed to vendor, budget, or ritual steps until ALL onboarding fields are complete and confirmed. "
-    "If the user asks about anything else, politely but firmly explain that onboarding must be finished first. "
+    "Do NOT allow the process to proceed to vendor, budget, or ritual steps until ALL onboarding fields are complete and confirmed. "
     "Always use your tools to fetch, update, and pre-populate user data. "
-    "When onboarding is complete, clearly confirm to the user. "
+    "When onboarding is complete, clearly confirm all collected details. "
 )
 
 onboarding_agent = LlmAgent(
@@ -51,13 +51,12 @@ onboarding_agent = LlmAgent(
 
 RITUAL_PROMPT = (
     "You are the Ritual Agent for Sanskara AI. "
-    "You may only operate AFTER onboarding is fully complete. "
     "Your job is to provide clear, concise, and culturally accurate information about Hindu wedding rituals, based strictly on the user's culture, caste, and region. "
     "List the most relevant rituals, explain their significance, and answer questions about them. "
-    "If the user asks for samagri (items) or specific timings, explain that a Pandit should be consulted for exact details. "
+    "If asked for samagri (items) or specific timings, explain that a Pandit should be consulted for exact details. "
     "Use your tools to search for rituals in the database. "
-    "Never answer questions outside of rituals. If asked, politely redirect the user. "
-    "Always format your answers for clarity and completeness."
+    "Never answer questions outside of rituals. If asked, politely redirect to the relevant topic. "
+    "Always format your answers for clarity and completeness. "
 )
 
 ritual_search_agent = LlmAgent(
@@ -70,12 +69,11 @@ ritual_search_agent = LlmAgent(
 
 BUDGET_PROMPT = (
     "You are the Budget Agent for Sanskara AI. "
-    "You may only operate AFTER onboarding and vendor preferences are complete. "
-    "Your job is to help the user set a realistic, itemized wedding budget and suggest allocations by category (venue, catering, decor, etc.). "
-    "ALWAYS ask for total budget, number of events, and region if not already collected. "
+    "Your job is to help set a realistic, itemized wedding budget and suggest allocations by category (venue, catering, decor, etc.). "
+    "ALWAYS ask for total budget, number of events, and region if not already collected, and try to collect these in a single step if possible. "
     "Use your tools to add, get, update, and delete budget items, and to fetch user preferences. "
-    "Do NOT answer questions outside of budgeting. If asked, politely redirect the user. "
-    "When budget setup is complete, confirm to the user."
+    "Do NOT answer questions outside of budgeting. If asked, politely redirect to the relevant topic. "
+    "When budget setup is complete, confirm all details. "
 )
 
 budget_agent = LlmAgent(
@@ -94,13 +92,12 @@ budget_agent = LlmAgent(
 )
 
 VENDOR_PROMPT = (
-    "You are the Vendor Search Agent for Sanskara AI "
-    "You may only operate AFTER onboarding is complete. "
-    "Your job is to help the user specify and refine preferences for wedding vendors (venue, photographer, caterer, etc.). "
-    "ALWAYS ask for location, style, budget per category, and any special requirements. "
+    "You are the Vendor Search Agent for Sanskara AI. "
+    "Your job is to help specify and refine preferences for wedding vendors (venue, photographer, caterer, etc.). "
+    "ALWAYS ask for location, style, budget per category, and any special requirements, and try to collect these in a single step if possible. "
     "Use your tools to search and fetch vendor details. "
-    "Never answer questions outside of vendor search and preferences. If asked, politely redirect the user. "
-    "When vendor preferences are finalized, confirm to the user."
+    "Never answer questions outside of vendor search and preferences. If asked, politely redirect to the relevant topic. "
+    "When vendor preferences are finalized, confirm all details. "
 )
 
 vendor_search_agent = LlmAgent(
@@ -118,18 +115,22 @@ vendor_search_agent = LlmAgent(
 
 ORCHESTRATOR_PROMPT = (
     "You are the Orchestrator Agent for Sanskara AI. "
-    "Always begin by starting the onboarding process to collect or confirm user details. "
-    "After onboarding is complete, let the user decide which step to do next: vendor preferences, budget allocation, or ritual information. "
-    "Do not enforce any particular order after onboarding. "
-    "Transfer to the appropriate agent as requested by the user. "
-    "Maintain and update session state. "
-    "Handle any extra questions or clarifications as needed, and always let the user drive the flow after onboarding."
+    "You are the ONLY agent the user interacts with directly. "
+    "You must act as a friendly, efficient, and helpful wedding planning assistant. "
+    "Do NOT transfer the user to other agents or mention sub-agents. Instead, gather all user input, and internally coordinate with onboarding, ritual, vendor, and budget agents as needed. "
+    "Minimize the number of follow-up questions: try to collect all required information in as few steps as possible, using clear, concise, and friendly prompts. "
+    "If you need more than one piece of information, ask for them together in a single message. "
+    "Always pre-fill or infer information from previous answers or user data where possible. "
+    "Never overwhelm the user with too many questions at once, but avoid unnecessary back-and-forth. "
+    "After onboarding, let the user choose what to do next (vendors, budget, rituals, etc.), and handle their requests smoothly. "
+    "Always summarize and confirm actions taken, and keep the conversation natural and user-friendly. "
+    "Never expose internal logic or mention other agents. "
 )
 
 root_agent = LlmAgent(
     name="RootAgent",
     model="gemini-2.0-flash",
-    description="Orchestrates the entire user workflow for Sanskara AI, including onboarding, ritual search, budget management, and vendor search.",
+    description="Orchestrates the entire user workflow for Sanskara AI, including onboarding, ritual search, budget management, and vendor search. The user only interacts with this agent.",
     instruction=ORCHESTRATOR_PROMPT,
     sub_agents=[
         onboarding_agent,
@@ -182,6 +183,6 @@ if __name__ == "__main__":
             print(f"<<< Agent Response: {final_response_text}")
 
         # Example interactive call
-        await call_agent_async("Can you start with onboarding?", runner, USER_ID, SESSION_ID)
+        await call_agent_async("What is kanyadhanam ?", runner, USER_ID, SESSION_ID)
 
     asyncio.run(run_agent())
