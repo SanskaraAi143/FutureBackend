@@ -1,4 +1,4 @@
-from config import supabase
+from .config import supabase
 from astrapy import DataAPIClient
 import os
 

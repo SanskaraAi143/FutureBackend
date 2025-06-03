@@ -4,6 +4,15 @@
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "sbp_c0c8e999a9946d5416c3c6773d09bc1b56cd38e0"
+      ]
     }
   }
 }

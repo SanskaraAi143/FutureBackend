@@ -25,7 +25,10 @@ def search_vendors(
     if max_price is not None:
         query = query.filter("pricing_range->>max", "<=", str(max_price))
     response = query.execute()
-    return response.data
+    data = response.data
+    if not data:
+        return [{"message": "No vendors found matching your criteria."}]
+    return data
 
 # Example usage (for testing):
 if __name__ == "__main__":

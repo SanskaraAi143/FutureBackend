@@ -3,13 +3,18 @@ from typing import Dict, Any, List, Optional
 from config import supabase  # Use supabase client from config.py
 
 
-def set_user_budget(user_id: str, budget_min: float, budget_max: float) -> Dict[str, Any]:
+def set_user_budget(user_id: str, budget_min: str, budget_max: str) -> Dict[str, Any]:
     """
-    Update the user's preferences JSONB in users table with budget_min and budget_max.
+    Update the user's preferences JSONB in users table with budget_min and budget_max.  Handles potential errors.
     """
-    preferences = {"budget_min": budget_min, "budget_max": budget_max}
-    response = supabase.table("users").update({"preferences": preferences}).eq("user_id", user_id).execute()
-    return response.data
+    try:
+        budget_min = float(budget_min)
+        budget_max = float(budget_max)
+        preferences = {"budget_min": budget_min, "budget_max": budget_max}
+        response = supabase.table("users").update({"preferences": preferences}).eq("user_id", user_id).execute()
+        return response.data
+    except ValueError:
+        return {"error": "Invalid budget values. Please provide numbers."}
 
 
 def get_user_budget(user_id: str) -> Optional[Dict[str, float]]:

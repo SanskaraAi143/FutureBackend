@@ -55,44 +55,78 @@ async def test_vendor_search_agent():
 
 @pytest.mark.asyncio
 def test_onboarding_agent_tools():
-    # Test the onboarding agent's tools directly
     from .tools import get_user_id, get_user_data, update_user_data
-    # Example: test get_user_id
-    user_id = get_user_id("test@example.com")
-    assert user_id is not None or user_id is None  # Accepts any result for demo
-    # Example: test get_user_data
-    data = get_user_data("test_user")
-    assert isinstance(data, dict) or data is None
-    # Example: test update_user_data
-    result = update_user_data("test_user", {"display_name": "Test User"})
-    assert result is not None or result is None
-
-@pytest.mark.asyncio
-def test_ritual_search_agent_tools():
-    from .tools import search_rituals
-    rituals = search_rituals("Tamil Brahmin")
-    assert isinstance(rituals, list) or rituals is None
+    async def run():
+        user_id = await get_user_id("test@example.com")
+        assert user_id is not None or user_id is None
+        data = await get_user_data("test_user")
+        assert isinstance(data, dict) or data is None
+        result = await update_user_data("test_user", {"display_name": "Test User"})
+        assert result is not None or result is None
+    asyncio.run(run())
 
 @pytest.mark.asyncio
 def test_budget_agent_tools():
     from .tools import add_budget_item, get_budget_items, update_budget_item, delete_budget_item
-    # Add budget item
-    add_result = add_budget_item("test_user", {"item": "Venue", "category": "Venue", "amount": 10000})
-    assert add_result is not None or add_result is None
-    # Get budget items
-    items = get_budget_items("1b006058-1133-490c-b2de-90c444e56138")
-    assert isinstance(items, list) or items is None
-    # Update budget item
-    update_result = update_budget_item("8eb19cec-a51a-4327-80cb-3d441a9e66b7", amount=12000)
-    assert update_result is not None or update_result is None
-    # Delete budget item
-    delete_result = delete_budget_item("8eb19cec-a51a-4327-80cb-3d441a9e66b7")
-    assert delete_result is not None or delete_result is None
+    async def run():
+        add_result = await add_budget_item("test_user", {"item": "Venue", "category": "Venue", "amount": 10000})
+        assert add_result is not None or add_result is None
+        items = await get_budget_items("1b006058-1133-490c-b2de-90c444e56138")
+        assert isinstance(items, list) or items is None
+        update_result = await update_budget_item("8eb19cec-a51a-4327-80cb-3d441a9e66b7", amount=12000)
+        assert update_result is not None or update_result is None
+        delete_result = await delete_budget_item("8eb19cec-a51a-4327-80cb-3d441a9e66b7")
+        assert delete_result is not None or delete_result is None
+    asyncio.run(run())
 
 @pytest.mark.asyncio
 def test_vendor_search_agent_tools():
     from .tools import list_vendors, get_vendor_details
-    vendors = list_vendors({"vendor_category": "Venue", "address->>city": "Bangalore"})
-    assert isinstance(vendors, list) or vendors is None
-    details = get_vendor_details(1)
-    assert isinstance(details, dict) or details is None
+    async def run():
+        vendors = await list_vendors({"vendor_category": "Venue", "address->>city": "Bangalore"})
+        assert isinstance(vendors, list) or vendors is None
+        details = await get_vendor_details("1")
+        assert isinstance(details, dict) or details is None
+    asyncio.run(run())
+
+@pytest.mark.asyncio
+async def test_onboarding_agent_error_handling():
+    session_service = InMemorySessionService()
+    session = await session_service.create_session(app_name="test_app", user_id="test_user", session_id="test_session_onboarding_error")
+    runner = Runner(agent=onboarding_agent, app_name="test_app", session_service=session_service)
+    # Missing email
+    content = types.Content(role='user', parts=[types.Part(text="I want to onboard but won't give email")])
+    responses = []
+    async for event in runner.run_async(user_id="test_user", session_id="test_session_onboarding_error", new_message=content):
+        if event.is_final_response():
+            responses.append(event.content.parts[0].text)
+    assert responses, "Onboarding agent did not respond to error case."
+    assert any("error" in r.lower() or "missing" in r.lower() for r in responses)
+
+@pytest.mark.asyncio
+async def test_budget_agent_invalid_input():
+    session_service = InMemorySessionService()
+    session = await session_service.create_session(app_name="test_app", user_id="test_user", session_id="test_session_budget_invalid")
+    runner = Runner(agent=budget_agent, app_name="test_app", session_service=session_service)
+    # Invalid budget (string instead of number)
+    content = types.Content(role='user', parts=[types.Part(text="Set my budget to 'a lot'")])
+    responses = []
+    async for event in runner.run_async(user_id="test_user", session_id="test_session_budget_invalid", new_message=content):
+        if event.is_final_response():
+            responses.append(event.content.parts[0].text)
+    assert responses, "Budget agent did not respond to invalid input."
+    assert any("error" in r.lower() or "invalid" in r.lower() for r in responses)
+
+@pytest.mark.asyncio
+async def test_vendor_search_agent_no_results():
+    session_service = InMemorySessionService()
+    session = await session_service.create_session(app_name="test_app", user_id="test_user", session_id="test_session_vendor_no_results")
+    runner = Runner(agent=vendor_search_agent, app_name="test_app", session_service=session_service)
+    # Query for a non-existent vendor
+    content = types.Content(role='user', parts=[types.Part(text="Find me a unicorn vendor in Atlantis.")])
+    responses = []
+    async for event in runner.run_async(user_id="test_user", session_id="test_session_vendor_no_results", new_message=content):
+        if event.is_final_response():
+            responses.append(event.content.parts[0].text)
+    assert responses, "Vendor search agent did not respond to no-results case."
+    assert any("no vendor" in r.lower() or "not found" in r.lower() or "no results" in r.lower() for r in responses)

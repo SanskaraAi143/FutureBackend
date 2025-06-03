@@ -1,180 +1,230 @@
 # tools.py - Custom tools for ADK agents to interact with Supabase and Astra DB
 
 from typing import List, Dict, Any, Optional
-from .config import supabase, astra_db # Import configured clients
+from .config import astra_db # Import configured clients
 import json
+import os
+import asyncio
+import dotenv
+import ast
+from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters
 
-# --- Supabase Tools ---
+dotenv.load_dotenv('.env')
+SUPABASE_ACCESS_TOKEN = os.getenv("SUPABASE_ACCESS_TOKEN")
 
-# coustom query for interacting with Supabase
-def get_user_id(email: str) -> Dict[str, Any]:
+# Global MCPToolset instance for Supabase
+_supabase_mcp_toolset = None
+_supabase_tools = None
+
+async def init_supabase_mcp():
+    global _supabase_mcp_toolset, _supabase_tools
+    if _supabase_mcp_toolset is None:
+        mcp = MCPToolset(
+            connection_params=StdioServerParameters(
+                command='npx',
+                args=["-y", "@supabase/mcp-server-supabase@latest", "--access-token", SUPABASE_ACCESS_TOKEN],
+            ),
+            tool_filter=["execute_sql","list_tables"]
+        )
+        tools = await mcp.get_tools()
+        _supabase_mcp_toolset = mcp
+        _supabase_tools = {tool.name: tool for tool in tools}
+    return _supabase_mcp_toolset, _supabase_tools
+
+def sql_quote_value(val):
     """
-    Retrieves user_id from the 'users' table by email.
-
+    Safely quote and format a value for SQL inlining.
     Args:
-        email (str): The email address of the user.
-
+        val: The value to quote (str, int, float, dict, list, or None).
     Returns:
-        Dict[str, Any]: A dictionary containing user_id if found, otherwise an error message.
+        str: The SQL-safe string representation of the value.
     """
-    try:
-        response = supabase.table("users").select("user_id").eq("email", email).single().execute()
-        if hasattr(response, "data") and response.data:
-            return response.data
-        else:
-            return {"error": "User not found."}
-    except Exception as e:
-        return {"error": f"Error fetching user_id: {e}"}
-    
-def get_user_data(user_id: str) -> Optional[Dict[str, Any]]:
-    """
-    Retrieves user data from the 'users' table by user_id.
+    if val is None:
+        return 'NULL'
+    if isinstance(val, (int, float)):
+        return str(val)
+    if isinstance(val, dict) or isinstance(val, list):
+        return f"'{json.dumps(val).replace("'", "''")}'"
+    return f"'{str(val).replace("'", "''")}'"
 
+async def execute_supabase_sql(sql: str, params: dict = None):
+    """
+    Execute a SQL query against Supabase via the MCP server.
     Args:
-        user_id (str): The unique identifier of the user.
-
+        sql (str): The SQL query string, with :param placeholders.
+        params (dict, optional): Parameters to inline into the SQL string.
     Returns:
-        Optional[Dict[str, Any]]: A dictionary containing user data if found, otherwise None.  Returns an error message if there's an issue with the database query.
+        Any: Parsed result (list or dict), or dict with 'error'.
     """
+    mcp, tools = await init_supabase_mcp()
+    tool = tools.get("execute_sql")
+    if not tool:
+        raise RuntimeError("Supabase MCP execute_sql tool not found.")
     try:
-        response = supabase.table("users").select("*").eq("user_id", user_id).single().execute()
-        if hasattr(response, "data") and response.data:
-            return response.data
-        else:
-            return None # User not found
+        # Inline params robustly
+        if params:
+            for k, v in params.items():
+                sql = sql.replace(f":{k}", sql_quote_value(v))
+        args = {"query": sql}
+        project_id = os.getenv("SUPABASE_PROJECT_ID") or "lylsxoupakajkuisjdfl"
+        args["project_id"] = project_id
+        print(f"[MCP SQL DEBUG] Final SQL: {sql}")
+        print(f"[MCP SQL DEBUG] Args sent to MCP: {args}")
+        result = await tool.run_async(args=args, tool_context=None)
+        if hasattr(result, "content") and result.content:
+            text = result.content[0].text if hasattr(result.content[0], "text") else str(result.content[0])
+            try:
+                parsed = json.loads(text)
+                return parsed
+            except Exception:
+                try:
+                    parsed = ast.literal_eval(text)
+                    return parsed
+                except Exception:
+                    return {"error": f"Unparsable tool result: {text}"}
+        return {"error": "No content returned from tool."}
     except Exception as e:
-        return {"error": f"Error fetching user data: {e}"}
+        return {"error": str(e)}
 
+# --- Supabase Tools (MCP-based, async) ---
 
-def update_user_data(user_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
-    """Updates user data in the 'users' table. Handles merging preferences. Automatically moves non-schema fields into preferences."""
-    """users table schema:  
-    TABLE users (
-        user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        supabase_auth_uid UUID UNIQUE NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        display_name TEXT,
-        created_at TIMESTAMPTZ DEFAULT now(),
-        updated_at TIMESTAMPTZ DEFAULT now(),
-        wedding_date DATE,
-        wedding_location TEXT,
-        wedding_tradition TEXT,
-        preferences JSONB DEFAULT '{}',
-        user_type TEXT CHECK (user_type IN ('couple', 'vendor', 'guest')) DEFAULT 'couple'
-        );"""
-    # List of top-level columns in the users table
+async def get_user_id(email: str) -> dict:
+    """
+    Get the user_id for a given email from the users table.
+    Args:
+        email (str): The user's email address.
+    Returns:
+        dict: {"user_id": <uuid>} or {"error": <str>}
+    """
+    sql = "SELECT user_id FROM users WHERE email = :email LIMIT 1;"
+    result = await execute_supabase_sql(sql, {"email": email})
+    print(f"SQL executed: {sql} with params: {json.dumps({'email': email})} result: {result}")
+    # Handle both dict-with-rows and list result
+    if isinstance(result, dict) and result.get("rows"):
+        return result["rows"][0]
+    elif isinstance(result, list) and result:
+        return result[0]
+    return {"error": "User not found."}
+
+async def get_user_data(user_id: str) -> dict:
+    """
+    Get all user data for a given user_id from the users table.
+    Args:
+        user_id (str): The user's UUID.
+    Returns:
+        dict: User data dict or {"error": <str>}
+    """
+    sql = "SELECT * FROM users WHERE user_id = :user_id LIMIT 1;"
+    result = await execute_supabase_sql(sql, {"user_id": user_id})
+    if isinstance(result, dict) and result.get("rows"):
+        return result["rows"][0]
+    elif isinstance(result, list) and result:
+        return result[0]
+    return {"error": "User not found."}
+
+async def update_user_data(user_id: str, data: dict) -> dict:
+    """
+    Update user data for a given user_id. Only allowed columns are updated; extra fields go into preferences.
+    Args:
+        user_id (str): The user's UUID.
+        data (dict): Fields to update (top-level or preferences).
+    Returns:
+        dict: Updated user data or {"error": <str>}
+    """
     USERS_TABLE_COLUMNS = {
         "user_id", "supabase_auth_uid", "email", "display_name", "created_at", "updated_at",
         "wedding_date", "wedding_location", "wedding_tradition", "preferences", "user_type"
     }
-    # Separate out fields that are not top-level columns (should go in preferences)
     preferences_update = data.pop("preferences", None) or {}
     extra_prefs = {k: data.pop(k) for k in list(data.keys()) if k not in USERS_TABLE_COLUMNS}
     if extra_prefs:
         preferences_update.update(extra_prefs)
     if preferences_update:
-        response = supabase.table("users").select("preferences").eq("user_id", user_id).single().execute()
-        current_prefs = response.data.get("preferences") if response and hasattr(response, "data") else {}
+        # Fetch current preferences
+        user = await get_user_data(user_id)
+        current_prefs = user.get("preferences") if user and isinstance(user, dict) else {}
         if not isinstance(current_prefs, dict):
             current_prefs = {}
         current_prefs.update(preferences_update)
         data["preferences"] = current_prefs
-    try:
-        response = supabase.table("users").update(data).eq("user_id", user_id).execute()
-        if hasattr(response, "data") and response.data:
-            return response.data[0]
-        else:
-            return {"error": "Update failed. No data returned."}
-    except Exception as e:
-        return {"error": f"Error updating user data: {e}"}
+    # Always JSON-serialize preferences if present
+    if "preferences" in data:
+        data["preferences"] = json.dumps(data["preferences"])
+    # Build SET clause
+    set_clause = ", ".join([f"{k} = :{k}" for k in data.keys()])
+    sql = f"UPDATE users SET {set_clause} WHERE user_id = :user_id RETURNING *;"
+    params = {**data, "user_id": user_id}
+    print(f"Final SQL for update_user_data: {sql} with params: {params}")
+    result = await execute_supabase_sql(sql, params)
+    if result and isinstance(result, dict) and result.get("rows"):
+        return result["rows"][0]
+    elif isinstance(result, list) and result:
+        return result[0]
+    return {"error": "Update failed."}
 
-
-def list_vendors(filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    """Lists vendors, applying filters if provided."""
-    """vendors table schema:
-    TABLE vendors (
-    vendor_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vendor_name VARCHAR(255) NOT NULL,
-    vendor_category VARCHAR(100) NOT NULL, -- 'Venue', 'Photographer', etc.
-    contact_email VARCHAR(255),
-    phone_number VARCHAR(50),
-    website_url TEXT,
-    address JSONB, -- {"full_address": "", "city": "", ...}
-    pricing_range JSONB, -- {"min": 5000, "max": 15000, ...}
-    rating FLOAT CHECK (rating >= 0 AND rating <= 5),
-    description TEXT,
-    details JSONB, -- Additional details 
-    portfolio_image_urls TEXT[], -- URLs to Supabase Storage
-    is_active BOOLEAN DEFAULT true,
-    supabase_auth_uid UUID UNIQUE NULL REFERENCES auth.users(id), -- Supabase Auth ID of primary vendor owner/admin
-    is_verified BOOLEAN DEFAULT false, -- For platform admins to verify vendors
-    commission_rate DECIMAL(5,2) DEFAULT 0.05, -- Platform's commission rate for this vendor
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-); """
-    query = supabase.table("vendors").select("*")
+async def list_vendors(filters: Optional[dict] = None) -> list:
+    """
+    List all vendors, optionally filtered by category, city, or other fields.
+    Args:
+        filters (Optional[dict]): Filter fields (e.g., {"vendor_category": "Venue"}).
+    Returns:
+        list: List of vendor dicts.
+    """
+    sql = "SELECT * FROM vendors"
+    params = {}
     if filters:
+        where_clauses = []
         for key, value in filters.items():
             if key == "address->>'city'":
-                query = query.ilike("address->>city", f"%{value}%")
+                where_clauses.append("address->>'city' ILIKE :city")
+                params["city"] = f"%{value}%"
             else:
-                query = query.ilike(key, f"%{value}%")
-    try:
-        response = query.execute()
-        return response.data or []
-    except Exception as e:
-        return {"error": f"Error listing vendors: {e}"}
+                where_clauses.append(f"{key} ILIKE :{key}")
+                params[key] = f"%{value}%"
+        if where_clauses:
+            sql += " WHERE " + " AND ".join(where_clauses)
+    result = await execute_supabase_sql(sql, params)
+    if isinstance(result, dict) and result.get("rows"):
+        return result["rows"]
+    elif isinstance(result, list):
+        return result
+    return []
 
+async def get_vendor_details(vendor_id: str) -> dict:
+    """
+    Get all details for a vendor by vendor_id.
+    Args:
+        vendor_id (str): The vendor's UUID.
+    Returns:
+        dict: Vendor data or {"error": <str>}
+    """
+    sql = "SELECT * FROM vendors WHERE vendor_id = :vendor_id LIMIT 1;"
+    result = await execute_supabase_sql(sql, {"vendor_id": vendor_id})
+    if isinstance(result, dict) and result.get("rows"):
+        return result["rows"][0]
+    elif isinstance(result, list) and result:
+        return result[0]
+    return {"error": "Vendor not found."}
 
-
-def get_vendor_details(vendor_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieves vendor details by vendor_id."""
-    """vendors table schema:
-    TABLE vendors (
-    vendor_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vendor_name VARCHAR(255) NOT NULL,
-    vendor_category VARCHAR(100) NOT NULL, -- 'Venue', 'Photographer', etc.
-    contact_email VARCHAR(255),
-    phone_number VARCHAR(50),
-    website_url TEXT,
-    address JSONB, -- {"full_address": "", "city": "", ...}
-    pricing_range JSONB, -- {"min": 5000, "max": 15000, ...}
-    rating FLOAT CHECK (rating >= 0 AND rating <= 5),
-    description TEXT,
-    details JSONB, -- Additional details 
-    portfolio_image_urls TEXT[], -- URLs to Supabase Storage
-    is_active BOOLEAN DEFAULT true,
-    supabase_auth_uid UUID UNIQUE NULL REFERENCES auth.users(id), -- Supabase Auth ID of primary vendor owner/admin
-    is_verified BOOLEAN DEFAULT false, -- For platform admins to verify vendors
-    commission_rate DECIMAL(5,2) DEFAULT 0.05, -- Platform's commission rate for this vendor
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);"""
-    try:
-        response = supabase.table("vendors").select("*").eq("vendor_id", vendor_id).single().execute()
-        if hasattr(response, "data") and response.data:
-            return response.data
-        else:
-            return None # Vendor not found
-    except Exception as e:
-        return {"error": f"Error fetching vendor details: {e}"}
-
-
-def add_budget_item(user_id: str, item: Dict[str, Any], vendor_name: Optional[str] = None, status: str = "Pending") -> Dict[str, Any]:
-    """Adds a budget item."""
-    """budget_items table schema:
-    TABLE budget_items (
-    item_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    item_name TEXT NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    amount DECIMAL(12, 2) NOT NULL,
-    vendor_name TEXT,
-    status VARCHAR(50) DEFAULT 'Pending',
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);"""
-    data = {
+async def add_budget_item(user_id: str, item: dict, vendor_name: Optional[str] = None, status: Optional[str] = "Pending") -> dict:
+    """
+    Add a budget item for a user.
+    Args:
+        user_id (str): The user's UUID.
+        item (dict): {"item": str, "category": str, "amount": number}
+        vendor_name (Optional[str]): Vendor name.
+        status (Optional[str]): Status string.
+    Returns:
+        dict: Inserted budget item or {"error": <str>}
+    """
+    # Ensure all required fields
+    if not (user_id and item.get("item") and item.get("category") and item.get("amount")):
+        return {"error": "Missing required fields for budget item."}
+    sql = (
+        "INSERT INTO budget_items (user_id, item_name, category, amount, vendor_name, status) "
+        "VALUES (:user_id, :item_name, :category, :amount, :vendor_name, :status) RETURNING *;"
+    )
+    params = {
         "user_id": user_id,
         "item_name": item.get("item"),
         "category": item.get("category"),
@@ -182,80 +232,69 @@ def add_budget_item(user_id: str, item: Dict[str, Any], vendor_name: Optional[st
         "vendor_name": vendor_name,
         "status": status
     }
-    try:
-        response = supabase.table("budget_items").insert(data).execute()
-        if hasattr(response, "data") and response.data:
-            return response.data[0]
-        else:
-            return {"error": "Adding budget item failed. No data returned."}
-    except Exception as e:
-        return {"error": f"Error adding budget item: {e}"}
+    print(f"Final SQL for add_budget_item: {sql} with params: {params}")
+    result = await execute_supabase_sql(sql, params)
+    if isinstance(result, dict) and result.get("rows"):
+        return result["rows"][0]
+    elif isinstance(result, list) and result:
+        return result[0]
+    return {"error": "Adding budget item failed."}
 
+async def get_budget_items(user_id: str) -> list:
+    """
+    Get all budget items for a user.
+    Args:
+        user_id (str): The user's UUID.
+    Returns:
+        list: List of budget item dicts.
+    """
+    sql = "SELECT * FROM budget_items WHERE user_id = :user_id;"
+    result = await execute_supabase_sql(sql, {"user_id": user_id})
+    if isinstance(result, dict) and result.get("rows"):
+        return result["rows"]
+    elif isinstance(result, list):
+        return result
+    return []
 
-def get_budget_items(user_id: str) -> List[Dict[str, Any]]:
-    """Retrieves all budget items for a user."""
-    """budget_items table schema:
-    TABLE budget_items (
-    item_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    item_name TEXT NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    amount DECIMAL(12, 2) NOT NULL,
-    vendor_name TEXT,
-    status VARCHAR(50) DEFAULT 'Pending',
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);"""
-    try:
-        response = supabase.table("budget_items").select("*").eq("user_id", user_id).execute()
-        return response.data or []
-    except Exception as e:
-        return {"error": f"Error getting budget items: {e}"}
+async def update_budget_item(item_id: str, **kwargs) -> dict:
+    """
+    Update a budget item by item_id.
+    Args:
+        item_id (str): The budget item's UUID.
+        kwargs: Fields to update (e.g., amount, status).
+    Returns:
+        dict: Updated budget item or {"error": <str>}
+    """
+    if not kwargs:
+        return {"error": "No fields to update."}
+    set_clause = ", ".join([f"{k} = :{k}" for k in kwargs.keys()])
+    sql = f"UPDATE budget_items SET {set_clause} WHERE item_id = :item_id RETURNING *;"
+    params = {**kwargs, "item_id": item_id}
+    print(f"Final SQL for update_budget_item: {sql} with params: {params}")
+    result = await execute_supabase_sql(sql, params)
+    if isinstance(result, dict) and result.get("rows"):
+        return result["rows"][0]
+    elif isinstance(result, list) and result:
+        return result[0]
+    return {"error": "Updating budget item failed."}
 
-
-def update_budget_item(item_id: str, **kwargs) -> Dict[str, Any]:
-    """Updates a budget item."""
-    """TABLE budget_items (
-    item_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    item_name TEXT NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    amount DECIMAL(12, 2) NOT NULL,
-    vendor_name TEXT,
-    status VARCHAR(50) DEFAULT 'Pending',
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);"""
-    try:
-        response = supabase.table("budget_items").update(kwargs).eq("item_id", item_id).execute()
-        if hasattr(response, "data") and response.data:
-            return response.data[0]
-        else:
-            return {"error": "Updating budget item failed. No data returned."}
-    except Exception as e:
-        return {"error": f"Error updating budget item: {e}"}
-
-
-def delete_budget_item(item_id: str) -> Dict[str, Any]:
-    """Deletes a budget item."""
-    """budget_items table schema:
-    TABLE budget_items (
-    item_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    item_name TEXT NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    amount DECIMAL(12, 2) NOT NULL,
-    vendor_name TEXT,
-    status VARCHAR(50) DEFAULT 'Pending',
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);"""
-    try:
-        response = supabase.table("budget_items").delete().eq("item_id", item_id).execute()
-        return {"status": "success"} if hasattr(response, "data") and response.data else {"error": "Deletion failed."}
-    except Exception as e:
-        return {"error": f"Error deleting budget item: {e}"}
-
+async def delete_budget_item(item_id: str) -> dict:
+    """
+    Delete a budget item by item_id.
+    Args:
+        item_id (str): The budget item's UUID.
+    Returns:
+        dict: {"status": "success"} or {"error": <str>}
+    """
+    sql = "DELETE FROM budget_items WHERE item_id = :item_id RETURNING item_id;"
+    params = {"item_id": item_id}
+    print(f"Final SQL for delete_budget_item: {sql} with params: {params}")
+    result = await execute_supabase_sql(sql, params)
+    if isinstance(result, dict) and result.get("rows"):
+        return {"status": "success"}
+    elif isinstance(result, list) and result:
+        return {"status": "success"}
+    return {"error": "Deletion failed."}
 
 # --- Astra DB Tools ---
 
@@ -279,57 +318,50 @@ def search_rituals(question: str) -> List[Dict[str, Any]]:
 
 
 
-# Example usage (for testing):
+# --- AGENT/TOOL PROMPT INPUT/OUTPUT RECOMMENDATIONS (ENHANCED) ---
+# For each tool, specify clear, robust input and output formats for agent use.
+# For agents/sub-agents, specify orchestration and error handling best practices.
+
+# get_user_id
+# Input: {"email": <user_email:str>}
+# Output: {"user_id": <uuid>} or {"error": <str>}
+
+# get_user_data
+# Input: {"user_id": <uuid>}
+# Output: {user_data_dict} or {"error": <str>}
+
+# update_user_data
+# Input: {"user_id": <uuid>, "data": {fields to update}}
+# Output: {updated_user_data_dict} or {"error": <str>}
+
+# list_vendors
+# Input: {"filters": {optional filter dict}}
+# Output: [vendor_dict, ...]
+
+# get_vendor_details
+# Input: {"vendor_id": <uuid>}
+# Output: {vendor_dict} or {"error": <str>}
+
+# add_budget_item
+# Input: {"user_id": <uuid>, "item": {"item": str, "category": str, "amount": number}}
+# Output: {inserted_budget_item_dict} or {"error": <str>}
+
+# get_budget_items
+# Input: {"user_id": <uuid>}
+# Output: [budget_item_dict, ...] or {"error": <str>}
+
+# update_budget_item
+# Input: {"item_id": <uuid>, "fields": {fields to update}}
+# Output: {updated_budget_item_dict} or {"error": <str>}
+
+# delete_budget_item
+# Input: {"item_id": <uuid>}
+# Output: {"status": "success"} or {"error": <str>}
+
 if __name__ == "__main__":
-    # Replace with real IDs and data for testing
-    test_user_id = "1b006058-1133-490c-b2de-90c444e56138"
-    test_vendor_id = "4b32c609-eb0a-4129-9f4f-a4a76b214cbe"
-    test_budget_item_id = "ca42fe02-ac69-450b-952b-e9674a475697"
-    test_question = "Describe the Haldi ceremony"
-    test_user_uuid="1b006058-1133-490c-b2de-90c444e56138"
-    test_vector_embedding = [0.1, 0.2, 0.3, 0.4, 0.5] # Replace with a real embedding
-    # print("Testing get_user_id...")
-    email = "kpuneeth714@gmail.com"
-    print(get_user_id(email))
-    # print("Testing get_user_data...")
-    # print(get_user_data(test_user_id))
-
-    test_user_uuid="1b006058-1133-490c-b2de-90c444e56138"
-    print("\nTesting update_user_data...")
-    print(update_user_data(test_user_id, {
-        "display_name": "Test User",
-        "wedding_date": "2024-12-31",
-        "wedding_location": "Test Location",
-        "wedding_tradition": "Test Tradition",
-        "preferences": {
-            "vendor_preferences": {
-                "Venue": ["Test Venue"],
-                "Catering": ["Test Catering"]
-            }
-        }
-    }))
-
-    # print("\nTesting list_vendors...")
-    # print(list_vendors({"vendor_category": "Venue"}))
-
-    # print("\nTesting get_vendor_details...")
-    # print(get_vendor_details(test_vendor_id))
-
-    # print("\nTesting add_budget_item...")
-    # print(add_budget_item(test_user_id, "Test Item", "Decor", 1000))
-
-    # print("\nTesting get_budget_items...")
-    # print(get_budget_items(test_user_id))
-
-    # print("\nTesting update_budget_item...")
-    # print(update_budget_item(test_budget_item_id, amount=1500))
-
-    # print("\nTesting delete_budget_item...")
-    # print(delete_budget_item(test_budget_item_id))
-
-    # print("\nTesting search_rituals...")
-    # print(search_rituals(test_question))
-
-    print("\nTesting custom query...")
-    #custom_query = "SELECT * FROM users where email = 'kpuneeth714@gmail.com'"
-    #print(coustom_query(custom_query))
+    # Example usage
+    async def main():
+        await init_supabase_mcp()
+        # Removed call to list_tables (no longer exists)
+        print("Supabase MCP initialized.")
+    asyncio.run(main())
