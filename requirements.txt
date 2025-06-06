@@ -1,4 +1,5 @@
 google-adk
+google-adk[eval]
 supabase
 cassio
 cassandra-driver
@@ -6,3 +7,4 @@ python-dotenv
 astrapy
 pytest
 pytest-asyncio
+google-adk[eval]

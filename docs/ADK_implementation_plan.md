@@ -1,0 +1,57 @@
+# Google ADK Implementation Plan for Sanskara AI (FutureBackend)
+
+## 1. Environment & Setup
+- [x] Ensure `google-adk` and `litellm` are installed (`pip install google-adk litellm`).
+- [x] Set up and activate a Python virtual environment for isolation.
+- [x] Configure all required environment variables and credentials.
+
+## 2. Agent Architecture & Orchestration
+- [] Define all core agents as `LlmAgent` (Onboarding, Ritual, Budget, Vendor) with clear, flow-enforcing prompts and robust tool lists. See `agent.py`.
+- [] Implement a custom `RootAgent` (orchestrator) as an `LlmAgent` with sub-agents, not a SequentialAgent, to allow flexible, out-of-order flows.
+- [] Use ADK session state (`InvocationContext.session.state`) for all data passing between agents. Each agent reads/writes only its relevant state keys.
+- [] Add output keys to agents where needed to save results to state for downstream agents.
+- [ ] Implement before/after tool/model callbacks for:
+    - Guardrails (e.g., user ID validation, keyword blocking, quota checks)
+    - Self-healing (auto-retry, escalate, or fallback on tool/model errors)
+    - Logging and artifact saving (for debugging and audit)
+- [] Use ADK's event and callback system to monitor and react to all agent/tool/LLM failures (partially implemented, see error handling in `agent.py`).
+
+## 3. Tooling & Integration
+- [x] Wrap all Supabase and Astra DB access as ADK FunctionTools with robust error handling and retries (using async retry decorators, see `tools.py`).
+- [x] Register all tools with the correct agent(s) and ensure tool signatures match ADK requirements.
+- [ ] Implement before_tool_callback for all agents to validate tool arguments and block/modify calls as needed.
+- [ ] Add memory tools (e.g., `load_memory`) if cross-session recall is needed.
+
+## 4. Self-Healing & Edge Case Handling
+- [] All agents must:
+    - Detect and recover from tool/LLM errors (auto-retry, escalate, or fallback)
+    - Validate all user and agent inputs (type, range, required fields)
+    - Handle missing, ambiguous, or conflicting data by asking clarifying questions or escalating
+    - Save all critical state to session for recovery after crash/restart
+    - Use ADK's artifact saving for large or important outputs (planned)
+- [] Orchestrator must:
+    - Route requests to the correct sub-agent based on state and user intent
+    - Handle out-of-order or repeated user queries gracefully
+    - Detect stuck/looping flows and reset or escalate
+    - Track which agents have completed and which are pending
+    - Support human-in-the-loop escalation for unresolved or ambiguous cases
+
+## 5. Testing & Evaluation
+- [] Write `.test.json` evaluation files for all major agent flows (onboarding, vendor, budget, ritual, error cases) (in progress, see `test_agent_subagents.py`).
+- [] Use ADK's `AgentEvaluator` to run automated tests and track coverage.
+- [] Add tests for all edge cases: tool/LLM failure, missing data, invalid input, escalation, recovery.
+
+## 6. Deployment & Monitoring
+- [ ] Prepare deployment scripts for Cloud Run, GKE, or VM as needed.
+- [x] Ensure all credentials and environment variables are securely managed.
+- [ ] Add logging, monitoring, and alerting for all agent/tool/LLM failures and escalations.
+- [x] Document all setup, flows, and troubleshooting steps in `README.md` and architecture docs.
+
+## 7. Documentation & Architecture
+- [x] Create and maintain a detailed architecture document reflecting the actual codebase and agent pipeline (`docs/ADK_agent_architecture.md`).
+- [x] Reference this architecture in all planning and onboarding docs.
+
+
+---
+
+This plan is now tailored to the actual codebase and references the new architecture document (`docs/ADK_agent_architecture.md`). All steps are mapped to implemented or pending features, and the plan will be updated as new features are added or completed.

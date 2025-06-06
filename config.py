@@ -2,7 +2,8 @@
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
+load_dotenv()  # Load environment variables from .env file
+#load_dotenv("FutureBackend/.env")  # Load environment variables from .env file
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -19,6 +20,8 @@ from supabase import create_client, Client
 # Astra DB setup
 ASTRA_API_TOKEN = os.getenv("ASTRA_API_TOKEN")
 ASTRA_API_ENDPOINT = os.getenv("ASTRA_API_ENDPOINT")
+
+print(f"ASTRA_API_ENDPOINT: {ASTRA_API_ENDPOINT}")
 
 astra_client = DataAPIClient(ASTRA_API_TOKEN)
 astra_db = astra_client.get_database_by_api_endpoint(ASTRA_API_ENDPOINT)

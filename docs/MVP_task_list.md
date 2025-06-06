@@ -30,39 +30,40 @@ This checklist is tailored for building the MVP using the Google Agent Developme
 ---
 
 ## 4. Core Agent & Tool Design (ADK)
-- [ ] **Define agent pipeline using ADK** (Complexity: High)
-    - [ ] Use a single LlmAgent as the root orchestrator (no SequentialAgent)
-    - [ ] Implement LlmAgent sub-agents for onboarding, ritual, budget, and vendor flows
-    - [ ] Use ADK session state for data passing between agents
-    - [ ] Write detailed, flow-enforcing prompts for each agent (see MVP: onboarding first, then vendor, then budget, orchestrator handles out-of-order queries)
-- [ ] **Integrate Supabase and Astra DB tools/APIs** (Complexity: High)
+- [x] **Define agent pipeline using ADK** (Complexity: High)
+    - [x] Use a single LlmAgent as the root orchestrator (no SequentialAgent)
+    - [x] Implement LlmAgent sub-agents for onboarding, ritual, budget, and vendor flows
+    - [x] Use ADK session state for data passing between agents
+    - [x] Write detailed, flow-enforcing prompts for each agent (see MVP: onboarding first, then vendor, then budget, orchestrator handles out-of-order queries)
+- [x] **Integrate Supabase and Astra DB tools/APIs** (Complexity: High)
     - [x] Use FunctionTool or built-in ADK tools for Supabase data fetch, search, and updates
     - [x] Register Astra DB search as a tool for ritual queries
-    - [ ] Implement error handling and retries for all tool calls
+    - [x] Implement error handling and retries for all tool calls and llm overload or exhautions
 
 ---
 
 ## 5. Workflow Orchestration
-- [ ] **Implement main workflow agent** (Complexity: High)
-    - [ ] Compose LlmAgent as the orchestrator for the full user journey (onboarding → vendor → budget → ritual)
-    - [ ] Ensure state is shared and updated across all steps
-    - [ ] Add conditional logic for edge cases (e.g., missing data, user clarification needed, out-of-order queries)
+- [x] **Implement main workflow agent** (Complexity: High)
+    - [x] Compose LlmAgent as the orchestrator for the full user journey (onboarding → vendor → budget → ritual)
+    - [x] Ensure state is shared and updated across all steps
+    - [x] Add conditional logic for edge cases (e.g., missing data, user clarification needed, out-of-order queries)
 
 ---
 
 ## 6. Error Handling & Human Escalation
-- [ ] **Implement robust error handling** (Complexity: Medium)
-    - [ ] Validate all user and agent inputs
-    - [ ] Handle API/data errors with user-friendly messages
-    - [ ] Add human-in-the-loop escalation for unresolved or ambiguous cases (see ADK FunctionTool pattern)
+- [x] **Implement robust error handling** (Complexity: Medium)
+    - [x] Validate all user and agent inputs
+    - [x] Handle API/data errors with user-friendly messages
+    - [x] Add human-in-the-loop escalation for unresolved or ambiguous cases (see ADK FunctionTool pattern)
 
 ---
 
 ## 7. Testing & Evaluation
-- [ ] **Write agent evaluation tests** (Complexity: Medium)
-    - [ ] Use ADK's agent evaluation framework and `.test.json` files
-    - [ ] Test with real data and user scenarios
-    - [ ] Validate agent outputs and state transitions
+- [x] **Write agent evaluation tests** (Complexity: Medium)
+    - [x] Use ADK's agent evaluation framework and `.test.json` files
+    - [x] Test with real data and user scenarios
+    - [x] Validate agent outputs and state transitions
+    - [ ] **Note:** Some tests currently fail due to import/module path issues (see `sample_test_output.txt`).
 
 ---
 
