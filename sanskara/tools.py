@@ -1,7 +1,7 @@
 # tools.py - Custom tools for ADK agents to interact with Supabase and Astra DB
 
 from typing import List, Dict, Any, Optional
-from .config import astra_db # Import configured clients
+from sanskara.config import astra_db # Import configured clients
 import json
 import os
 import asyncio

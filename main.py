@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 
 # Get the directory where main.py is located and go back from that directory
-AGENT_DIR = os.path.dirname(os.path.abspath(__file__)) + "/../"
+AGENT_DIR = os.path.dirname(os.path.abspath(__file__)) 
 print(f"Agent directory: {AGENT_DIR}")
 # Example session DB URL (e.g., SQLite)
 SESSION_DB_URL = "sqlite:///./sessions.db"

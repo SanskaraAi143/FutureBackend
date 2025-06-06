@@ -1,7 +1,7 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from tools import *
+from sanskara.tools import *
 
 test_email = "test@example.com"
 test_user_id = "a1b2c3d4-e5f6-7890-1234-567890abcdef"

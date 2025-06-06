@@ -9,7 +9,7 @@ from google.adk.agents import Agent, SequentialAgent, LlmAgent,Agent
 from google.adk.events import Event, EventActions
 from google.adk.agents.invocation_context import InvocationContext
 from typing import AsyncGenerator, List, Dict, Any, Optional
-from .tools import (
+from sanskara.tools import (
     get_user_id,
     get_user_data,
     update_user_data,
@@ -113,6 +113,7 @@ VENDOR_PROMPT = (
     "If no vendors are found, always respond with a clear message such as 'No vendors found for your search.' or 'Not found.' "
     "Always check for errors in tool output and handle gracefully. "
     "Do NOT answer questions outside of vendor search. If asked, politely redirect to the relevant topic. "
+    "if any question is not related to vendor search, transfer control to the orchestrator agent or relevant agent. "
     "When vendor search is complete, confirm all details to the Orchestrator Agent. "
 
 )

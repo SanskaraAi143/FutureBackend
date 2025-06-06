@@ -3,7 +3,7 @@ import asyncio
 from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types
-from .agent import onboarding_agent, ritual_search_agent, budget_agent, vendor_search_agent
+from sanskara.agent import onboarding_agent, ritual_search_agent, budget_agent, vendor_search_agent
 
 @pytest.mark.asyncio
 async def test_onboarding_agent():

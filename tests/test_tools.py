@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from .tools import (
+from sanskara.tools import (
     get_user_id, get_user_data, update_user_data, list_vendors, get_vendor_details,
     add_budget_item, get_budget_items, update_budget_item, delete_budget_item,execute_supabase_sql,
 )

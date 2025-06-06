@@ -1,0 +1,27 @@
+The user side flow should be consistent and reliable - 1. get user email check if all required details are present for onbaording if not uisng onboarding get all details, then ask user what help they need vendor search, ritual related, or budget management - tell the recommended flow first , keep the state updating after each agent to agent interactions store relavent information in memory too - use SessionService , session.state and MemoryService wherever required.
+
+lets not create a custom orchestrator , use llm as orchestrator.
+
+can you read google adk docs using context7 mcp , understand all features and plan all the implementation steps for this project current workspace ,propose them and write them to a file and create todo list , the agents should be self healing, orchestration should be customized to current use case- think how to and all edge cases should be covered
+
+based on adk implementation plan , scan current workspace and use already implemented tools and agents(if needed and are only is suitable) and rewrite the whole architecute 
+
+agents and tools are defiened but the orchestration logic isn't working yet check MVP doc and propose a proper flow of the user side - with example and implement it
+ADK session state is not implemented , none of the agents are using this yet.
+adk event and callback for failures isn't implemented yet
+and all other which are not ticket in adk implementation plan
+
+i want the orchestator is the only agent interacts with user , and all other sub agents talk with orchestrator and provides and gets relevant information - no need to instruct to sub agents directly
+the orchestrator should be able to handle the user input and provide the necessary information to the sub agents, and also collect their responses to present a coherent output to the user
+the orchestrator should also handle the state management, session management, and memory management for the user interactions
+
+edit the prompt accordingly and - implement the state,session and memory logics too
+
+check in google adk docs and go though plan each step by step(think deep) and implement all requested features and tasks for the project
+Check each agent implementation and ensure they are using the SessionService, MemoryService, and handling state correctly.
+
+don't hallucinate always get the context of how to implement any logic or feature especially for google adk packages and implement
+
+https://google.github.io/adk-docs/sessions/sessions/#managing-sessions-with-a-sessionservice
+
+https://google.github.io/adk-docs/
