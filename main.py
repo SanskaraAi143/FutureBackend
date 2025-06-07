@@ -10,7 +10,7 @@ print(f"Agent directory: {AGENT_DIR}")
 # Example session DB URL (e.g., SQLite)
 SESSION_DB_URL = "sqlite:///./sessions.db"
 # Allow CORS for localhost:8030
-ALLOWED_ORIGINS = ["http://localhost:8030"]
+ALLOWED_ORIGINS = ["http://localhost:8030","https://sanskaraai.com"]
 # Set web=True if you intend to serve a web interface, False otherwise
 SERVE_WEB_INTERFACE = True
 
