@@ -9,6 +9,9 @@ from google.adk.agents import Agent, SequentialAgent, LlmAgent,Agent
 from google.adk.events import Event, EventActions
 from google.adk.agents.invocation_context import InvocationContext
 from typing import AsyncGenerator, List, Dict, Any, Optional
+from opik.integrations.adk import OpikTracer 
+opik_tracer = OpikTracer()
+
 from sanskara.tools import (
     get_user_id,
     get_user_data,
@@ -32,11 +35,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 ONBOARDING_PROMPT = (
     "You are the Onboarding Agent for Sanskara AI. "
     "Your job is to collect and confirm all required user details for wedding planning in as few steps as possible. "
-    "if email is given, use it to fetch user data from the users table. and pre-populate any existing data. "
+    "you must use email to fetch user data from the users table. and pre-populate any existing data before asking for any information."
     "When requesting information, always ask for multiple related fields together (e.g., name, email, wedding date, culture, region, etc.) to minimize back-and-forth. "
     "If any information is already available, use it to pre-fill or skip questions. "
     "IMPORTANT: Only write to the following top-level fields in the users table: display_name, wedding_date, wedding_location, wedding_tradition, user_type. All other user attributes (such as caste, culture, region, budget, guest count, etc.) MUST be stored inside the preferences dictionary. Do NOT attempt to write any other fields at the top level. "
-    "You must collect and confirm: full name, email, wedding date (or preferred month/year), culture, caste, region, estimated budget, guest count, and location. "
+    "You must collect : full name, email, wedding date (or preferred month/year), culture, caste, region, estimated budget, guest count, and location. "
+    "If above information is already available, use show it to the user and transfer control to the orchestrator agent. "
     "Do NOT allow the process to proceed to vendor, budget, or ritual steps until ALL onboarding fields are complete and confirmed. "
     "Always use your tools to fetch, update, and pre-populate user data. "
     "All user data operations are performed using robust, async tools that interact with Supabase via the MCP server, ensuring reliability and up-to-date information. "
@@ -61,7 +65,7 @@ RITUAL_PROMPT = (
     "List the most relevant rituals, explain their significance, and answer questions about them. "
     "If asked for samagri (items) or specific timings, explain that a Pandit should be consulted for exact details. "
     "Use your tools to search for rituals in the database. "
-    "Never answer questions outside of rituals. If asked, politely redirect to the relevant topic. "
+    "Never answer questions outside of rituals. If asked, you must redirect to the relevant agent. "
     "All data access is performed using robust, async tools for reliability. "
     "Always format your answers for clarity and completeness. "
 
@@ -72,7 +76,13 @@ ritual_search_agent = LlmAgent(
     model="gemini-1.5-flash",
     description="Handles ritual search.",
     instruction=RITUAL_PROMPT,
-    tools=[search_rituals]
+    tools=[search_rituals],
+    before_agent_callback=opik_tracer.before_agent_callback,
+    after_agent_callback=opik_tracer.after_agent_callback,
+    before_model_callback=opik_tracer.before_model_callback,
+    after_model_callback=opik_tracer.after_model_callback,
+    before_tool_callback=opik_tracer.before_tool_callback,
+    after_tool_callback=opik_tracer.after_tool_callback,
 )
 
 BUDGET_PROMPT = (
@@ -85,7 +95,7 @@ BUDGET_PROMPT = (
     "Don't ask any data related to database data that should be handled internally , first ask orchestrator agent to fetch the data. "
     "All budget operations are performed using robust, async tools that interact with Supabase via the MCP server, ensuring reliability and up-to-date information. "
     "Always check for errors in tool output and if any input is invalid, respond with a clear error message such as 'Error: Invalid input ...' or 'Error: ...'. "
-    "Do NOT answer questions outside of budgeting. If asked, politely redirect to the relevant topic. "
+    "Do NOT answer questions outside of budgeting. If asked,you must redirect to the relevant topic. "
     "When budget setup is complete, confirm all details to the Orchestrator Agent. "
 
 )
@@ -102,7 +112,13 @@ budget_agent = LlmAgent(
         delete_budget_item,
         get_user_data,
         update_user_data
-    ]
+    ],
+    before_agent_callback=opik_tracer.before_agent_callback,
+    after_agent_callback=opik_tracer.after_agent_callback,
+    before_model_callback=opik_tracer.before_model_callback,
+    after_model_callback=opik_tracer.after_model_callback,
+    before_tool_callback=opik_tracer.before_tool_callback,
+    after_tool_callback=opik_tracer.after_tool_callback,
 )
 
 VENDOR_PROMPT = (
@@ -114,7 +130,7 @@ VENDOR_PROMPT = (
     "All vendor operations are performed using robust, async tools that interact with Supabase via the MCP server, ensuring reliability and up-to-date information. "
     "If no vendors are found, always respond with a clear message such as 'No vendors found for your search.' or 'Not found.' "
     "Always check for errors in tool output and handle gracefully. "
-    "Do NOT answer questions outside of vendor search. If asked, politely redirect to the relevant topic. "
+    "Do NOT answer questions outside of vendor search. If asked, you must redirect to the relevant topic. "
     "if any question is not related to vendor search, transfer control to the orchestrator agent or relevant agent. "
     "When vendor search is complete, confirm all details to the Orchestrator Agent. "
 
@@ -128,7 +144,13 @@ vendor_search_agent = LlmAgent(
     tools=[
         list_vendors,
         get_vendor_details
-    ]
+    ],
+    before_agent_callback=opik_tracer.before_agent_callback,
+    after_agent_callback=opik_tracer.after_agent_callback,
+    before_model_callback=opik_tracer.before_model_callback,
+    after_model_callback=opik_tracer.after_model_callback,
+    before_tool_callback=opik_tracer.before_tool_callback,
+    after_tool_callback=opik_tracer.after_tool_callback,
 )
 
 # --- Root Agent ---
@@ -164,7 +186,13 @@ root_agent = LlmAgent(
         ritual_search_agent,
         budget_agent,
         vendor_search_agent
-    ]
+    ],
+    before_agent_callback=opik_tracer.before_agent_callback,
+    after_agent_callback=opik_tracer.after_agent_callback,
+    before_model_callback=opik_tracer.before_model_callback,
+    after_model_callback=opik_tracer.after_model_callback,
+    before_tool_callback=opik_tracer.before_tool_callback,
+    after_tool_callback=opik_tracer.after_tool_callback,
 )
 
 

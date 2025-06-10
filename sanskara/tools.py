@@ -24,7 +24,7 @@ async def init_supabase_mcp():
                 command='npx',
                 args=["-y", "@supabase/mcp-server-supabase@latest", "--access-token", SUPABASE_ACCESS_TOKEN],
             ),
-            tool_filter=["execute_sql","list_tables"]
+            tool_filter=["execute_sql"]
         )
         tools = await mcp.get_tools()
         _supabase_mcp_toolset = mcp
@@ -250,6 +250,7 @@ async def get_budget_items(user_id: str) -> list:
     """
     sql = "SELECT * FROM budget_items WHERE user_id = :user_id;"
     result = await execute_supabase_sql(sql, {"user_id": user_id})
+    print(f"result of get_budget_items: {result}")
     if isinstance(result, dict) and result.get("rows"):
         return result["rows"]
     elif isinstance(result, list):
@@ -261,22 +262,33 @@ async def update_budget_item(item_id: str, **kwargs) -> dict:
     Update a budget item by item_id.
     Args:
         item_id (str): The budget item's UUID.
-        kwargs: Fields to update (e.g., amount, status).
+        kwargs: Fields to update (e.g., amount, status) or {"data": {...}}.
     Returns:
         dict: Updated budget item or {"error": <str>}
     """
-    if not kwargs:
+    # Support both update_budget_item(item_id, amount=100) and update_budget_item(item_id, data={...})
+    fields = kwargs.get("data") if "data" in kwargs and isinstance(kwargs["data"], dict) else kwargs
+
+    if not fields:
         return {"error": "No fields to update."}
-    set_clause = ", ".join([f"{k} = :{k}" for k in kwargs.keys()])
+
+    set_clauses = [f"{k} = :{k}" for k in fields]
+    set_clause = ", ".join(set_clauses)
+
     sql = f"UPDATE budget_items SET {set_clause} WHERE item_id = :item_id RETURNING *;"
-    params = {**kwargs, "item_id": item_id}
-    print(f"Final SQL for update_budget_item: {sql} with params: {params}")
+    params = {**fields, "item_id": item_id}
+
+    print(f"Executing SQL: {sql} with params: {params}")
+
     result = await execute_supabase_sql(sql, params)
+
     if isinstance(result, dict) and result.get("rows"):
         return result["rows"][0]
     elif isinstance(result, list) and result:
         return result[0]
-    return {"error": "Updating budget item failed."}
+    else:
+        print(f"Error updating budget item: {result}")
+        return {"error": f"Updating budget item failed: {result}"}
 
 async def delete_budget_item(item_id: str) -> dict:
     """
