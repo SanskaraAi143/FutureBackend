@@ -25,13 +25,14 @@ except json.JSONDecodeError:
 SERVE_WEB_INTERFACE_STR = os.getenv("SERVE_WEB_INTERFACE", "True")
 SERVE_WEB_INTERFACE = SERVE_WEB_INTERFACE_STR.lower() == "true"
 
-# Call the function to get the FastAPI app instance
-app: FastAPI = get_fast_api_app(
-    agents_dir=AGENT_DIR,
-    session_db_url=SESSION_DB_URL,
-    allow_origins=ALLOWED_ORIGINS,
-    web=SERVE_WEB_INTERFACE,
-)
+try:
+    # Call the function to get the FastAPI app instance
+    app: FastAPI = get_fast_api_app(
+        agents_dir=AGENT_DIR,
+        session_db_url=SESSION_DB_URL,
+        allow_origins=ALLOWED_ORIGINS,
+        web=SERVE_WEB_INTERFACE,
+    )
 except Exception as e:
     logging.error(f"Failed to initialize FastAPI app: {e}", exc_info=True)
     raise  # Re-raise the exception to prevent the server from starting
