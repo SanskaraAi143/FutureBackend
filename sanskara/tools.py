@@ -117,10 +117,12 @@ async def get_user_data(user_id: str) -> dict:
     sql = "SELECT * FROM users WHERE user_id = :user_id LIMIT 1;"
     result = await execute_supabase_sql(sql, {"user_id": user_id})
     if isinstance(result, dict) and result.get("rows"):
-        return result["rows"][0]
+        user_data = result["rows"][0]
     elif isinstance(result, list) and result:
-        return result[0]
-    return {"error": "User not found."}
+        user_data = result[0]
+    else:
+        user_data = {"error": "User not found."}
+    return user_data
 
 async def update_user_data(user_id: str, data: dict) -> dict:
     """
@@ -132,17 +134,30 @@ async def update_user_data(user_id: str, data: dict) -> dict:
         dict: Updated user data or {"error": <str>}
     """
     USERS_TABLE_COLUMNS = {
-        "user_id", "supabase_auth_uid", "email", "display_name", "created_at", "updated_at",
-        "wedding_date", "wedding_location", "wedding_tradition", "preferences", "user_type"
+        "user_id",
+        "supabase_auth_uid",
+        "email",
+        "display_name",
+        "created_at",
+        "updated_at",
+        "wedding_date",
+        "wedding_location",
+        "wedding_tradition",
+        "preferences",
+        "user_type",
     }
     preferences_update = data.pop("preferences", None) or {}
-    extra_prefs = {k: data.pop(k) for k in list(data.keys()) if k not in USERS_TABLE_COLUMNS}
+    extra_prefs = {
+        k: data.pop(k) for k in list(data.keys()) if k not in USERS_TABLE_COLUMNS
+    }
     if extra_prefs:
         preferences_update.update(extra_prefs)
     if preferences_update:
         # Fetch current preferences
         user = await get_user_data(user_id)
-        current_prefs = user.get("preferences") if user and isinstance(user, dict) else {}
+        current_prefs = (
+            user.get("preferences") if user and isinstance(user, dict) else {}
+        )
         if not isinstance(current_prefs, dict):
             current_prefs = {}
         current_prefs.update(preferences_update)
@@ -157,10 +172,12 @@ async def update_user_data(user_id: str, data: dict) -> dict:
     print(f"Final SQL for update_user_data: {sql} with params: {params}")
     result = await execute_supabase_sql(sql, params)
     if result and isinstance(result, dict) and result.get("rows"):
-        return result["rows"][0]
+        updated_user_data = result["rows"][0]
     elif isinstance(result, list) and result:
-        return result[0]
-    return {"error": "Update failed."}
+        updated_user_data = result[0]
+    else:
+        updated_user_data = {"error": "Update failed."}
+    return updated_user_data
 
 async def list_vendors(filters: Optional[dict] = None) -> list:
     """
@@ -318,10 +335,7 @@ def search_rituals(question: str) -> List[Dict[str, Any]]:
     try:
         ritual_data = astra_db.get_collection("ritual_data")
         result = ritual_data.find(
-            projection={"$vectorize": True},
-            sort={"$vectorize": question},
-            limit=3
-            
+            projection={"$vectorize": True}, sort={"$vectorize": question}, limit=3
         )
         contexts = [doc for doc in result]
         return contexts

@@ -77,12 +77,7 @@ ritual_search_agent = LlmAgent(
     description="Handles ritual search.",
     instruction=RITUAL_PROMPT,
     tools=[search_rituals],
-    before_agent_callback=opik_tracer.before_agent_callback,
-    after_agent_callback=opik_tracer.after_agent_callback,
-    before_model_callback=opik_tracer.before_model_callback,
-    after_model_callback=opik_tracer.after_model_callback,
-    before_tool_callback=opik_tracer.before_tool_callback,
-    after_tool_callback=opik_tracer.after_tool_callback,
+
 )
 
 BUDGET_PROMPT = (
@@ -113,12 +108,7 @@ budget_agent = LlmAgent(
         get_user_data,
         update_user_data
     ],
-    before_agent_callback=opik_tracer.before_agent_callback,
-    after_agent_callback=opik_tracer.after_agent_callback,
-    before_model_callback=opik_tracer.before_model_callback,
-    after_model_callback=opik_tracer.after_model_callback,
-    before_tool_callback=opik_tracer.before_tool_callback,
-    after_tool_callback=opik_tracer.after_tool_callback,
+
 )
 
 VENDOR_PROMPT = (
@@ -145,12 +135,7 @@ vendor_search_agent = LlmAgent(
         list_vendors,
         get_vendor_details
     ],
-    before_agent_callback=opik_tracer.before_agent_callback,
-    after_agent_callback=opik_tracer.after_agent_callback,
-    before_model_callback=opik_tracer.before_model_callback,
-    after_model_callback=opik_tracer.after_model_callback,
-    before_tool_callback=opik_tracer.before_tool_callback,
-    after_tool_callback=opik_tracer.after_tool_callback,
+
 )
 
 # --- Root Agent ---
@@ -187,12 +172,7 @@ root_agent = LlmAgent(
         budget_agent,
         vendor_search_agent
     ],
-    before_agent_callback=opik_tracer.before_agent_callback,
-    after_agent_callback=opik_tracer.after_agent_callback,
-    before_model_callback=opik_tracer.before_model_callback,
-    after_model_callback=opik_tracer.after_model_callback,
-    before_tool_callback=opik_tracer.before_tool_callback,
-    after_tool_callback=opik_tracer.after_tool_callback,
+
 )
 
 
