@@ -1,6 +1,7 @@
 # tools.py - Custom tools for ADK agents to interact with Supabase and Astra DB
 
 from typing import List, Dict, Any, Optional
+from google.adk.tools.tool_context import ToolContext
 from sanskara.config import astra_db # Import configured clients
 import json
 import os
@@ -106,11 +107,12 @@ async def get_user_id(email: str) -> dict:
         return result[0]
     return {"error": "User not found."}
 
-async def get_user_data(user_id: str) -> dict:
+async def get_user_data(user_id: str, tool_context: ToolContext = None) -> dict:
     """
     Get all user data for a given user_id from the users table.
     Args:
         user_id (str): The user's UUID.
+        tool_context (ToolContext, optional): The tool context. Defaults to None.
     Returns:
         dict: User data dict or {"error": <str>}
     """
@@ -122,14 +124,16 @@ async def get_user_data(user_id: str) -> dict:
         user_data = result[0]
     else:
         user_data = {"error": "User not found."}
+
     return user_data
 
-async def update_user_data(user_id: str, data: dict) -> dict:
+async def update_user_data(user_id: str, data: dict, tool_context: ToolContext = None) -> dict:
     """
     Update user data for a given user_id. Only allowed columns are updated; extra fields go into preferences.
     Args:
         user_id (str): The user's UUID.
         data (dict): Fields to update (top-level or preferences).
+        tool_context (ToolContext, optional): The tool context. Defaults to None.
     Returns:
         dict: Updated user data or {"error": <str>}
     """
@@ -177,6 +181,7 @@ async def update_user_data(user_id: str, data: dict) -> dict:
         updated_user_data = result[0]
     else:
         updated_user_data = {"error": "Update failed."}
+
     return updated_user_data
 
 async def list_vendors(filters: Optional[dict] = None) -> list:

@@ -38,7 +38,7 @@ try:
         os.makedirs(db_dir, exist_ok=True)
 
     # Initialize the session service
-    session_service = DatabaseSessionService(database_url=SESSION_DB_URL)
+    session_service = DatabaseSessionService(db_url=SESSION_DB_URL)
 
     # Call the function to get the FastAPI app instance
     app: FastAPI = get_fast_api_app(
@@ -46,7 +46,6 @@ try:
         session_db_url=SESSION_DB_URL,
         allow_origins=ALLOWED_ORIGINS,
         web=SERVE_WEB_INTERFACE,
-        session_service=session_service,  # Pass the session service to get_fast_api_app
     )
 except Exception as e:
     logging.error(f"Failed to initialize FastAPI app: {e}", exc_info=True)
