@@ -2,7 +2,9 @@
 
 from typing import List, Dict, Any, Optional
 from google.adk.tools.tool_context import ToolContext
+from google.adk.tools import LongRunningFunctionTool
 from sanskara.config import astra_db # Import configured clients
+from typing import Optional
 import json
 import os
 import asyncio
@@ -112,7 +114,6 @@ async def get_user_data(user_id: str, tool_context: ToolContext = None) -> dict:
     Get all user data for a given user_id from the users table.
     Args:
         user_id (str): The user's UUID.
-        tool_context (ToolContext, optional): The tool context. Defaults to None.
     Returns:
         dict: User data dict or {"error": <str>}
     """
@@ -133,7 +134,6 @@ async def update_user_data(user_id: str, data: dict, tool_context: ToolContext =
     Args:
         user_id (str): The user's UUID.
         data (dict): Fields to update (top-level or preferences).
-        tool_context (ToolContext, optional): The tool context. Defaults to None.
     Returns:
         dict: Updated user data or {"error": <str>}
     """
@@ -376,6 +376,10 @@ def search_rituals(question: str) -> List[Dict[str, Any]]:
 # add_budget_item
 # Input: {"user_id": <uuid>, "item": {"item": str, "category": str, "amount": number}}
 # Output: {inserted_budget_item_dict} or {"error": <str>}
+
+# get_user_activities
+# Input: {"user_id": <uuid>}
+# Output: [activity_dict, ...] or {"error": <str>}
 
 # get_budget_items
 # Input: {"user_id": <uuid>}
