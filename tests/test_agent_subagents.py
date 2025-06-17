@@ -130,3 +130,16 @@ async def test_vendor_search_agent_no_results():
             responses.append(event.content.parts[0].text)
     assert responses, "Vendor search agent did not respond to no-results case."
     assert any("no vendor" in r.lower() or "not found" in r.lower() or "no results" in r.lower() for r in responses)
+
+@pytest.mark.asyncio
+async def test_create_timeline_event_agent():
+    from sanskara.agent import root_agent
+    session_service = InMemorySessionService()
+    session = await session_service.create_session(app_name="test_app", user_id="test_user", session_id="test_session_timeline")
+    runner = Runner(agent=root_agent, app_name="test_app", session_service=session_service)
+    content = types.Content(role='user', parts=[types.Part(text="Add Sangeet event to my timeline on 2024-08-03T18:00:00, with music and dance at Grand Ballroom.")])
+    responses = []
+    async for event in runner.run_async(user_id="test_user", session_id="test_session_timeline", new_message=content):
+        if event.is_final_response():
+            responses.append(event.content.parts[0].text)
+    assert responses, "Root agent did not respond."

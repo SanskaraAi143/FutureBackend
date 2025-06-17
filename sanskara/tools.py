@@ -1,8 +1,8 @@
 # tools.py - Custom tools for ADK agents to interact with Supabase and Astra DB
 
 from typing import List, Dict, Any, Optional
-from google.adk.tools.tool_context import ToolContext
-from google.adk.tools import LongRunningFunctionTool
+from google.adk.tools import  ToolContext, LongRunningFunctionTool
+from google.adk.tools.google_search_tool import GoogleSearchTool
 from sanskara.config import astra_db # Import configured clients
 from typing import Optional
 import json
@@ -66,6 +66,7 @@ async def execute_supabase_sql(sql: str, params: dict = None):
     try:
         # Inline params robustly
         if params:
+            print(f"[MCP SQL DEBUG] SQL before inlining: {sql}")  # Log before inlining
             for k, v in params.items():
                 sql = sql.replace(f":{k}", sql_quote_value(v))
         args = {"query": sql}
@@ -74,23 +75,25 @@ async def execute_supabase_sql(sql: str, params: dict = None):
         print(f"[MCP SQL DEBUG] Final SQL: {sql}")
         print(f"[MCP SQL DEBUG] Args sent to MCP: {args}")
         result = await tool.run_async(args=args, tool_context=None)
+        print(f"[MCP SQL DEBUG] Raw result from MCP: {result}") # Added logging
         if hasattr(result, "content") and result.content:
             text = result.content[0].text if hasattr(result.content[0], "text") else str(result.content[0])
             try:
                 parsed = json.loads(text)
                 return parsed
-            except Exception:
+            except Exception as e1:
+                print(f"[MCP SQL DEBUG] JSON parsing failed: {e1}")
                 try:
                     parsed = ast.literal_eval(text)
                     return parsed
-                except Exception:
-                    return {"error": f"Unparsable tool result: {text}"}
+                except Exception as e2:
+                    print(f"[MCP SQL DEBUG] Literal eval failed: {e2}")
+                    # If parsing fails, return the raw text
+                    return text
         return {"error": "No content returned from tool."}
     except Exception as e:
         return {"error": str(e)}
-
 # --- Supabase Tools (MCP-based, async) ---
-
 async def get_user_id(email: str) -> dict:
     """
     Get the user_id for a given email from the users table.
@@ -212,7 +215,7 @@ async def list_vendors(filters: Optional[dict] = None) -> list:
         return result
     return []
 
-async def get_vendor_details(vendor_id: str) -> dict:
+async def get_vendor_details(vendor_id: str, tool_context : ToolContext = None) -> dict:
     """
     Get all details for a vendor by vendor_id.
     Args:
@@ -279,79 +282,243 @@ async def get_budget_items(user_id: str) -> list:
         return result
     return []
 
-async def update_budget_item(item_id: str, **kwargs) -> dict:
+async def update_budget_item(item_id: str, data: dict, context: ToolContext = None) -> dict:
     """
     Update a budget item by item_id.
     Args:
         item_id (str): The budget item's UUID.
-        kwargs: Fields to update (e.g., amount, status) or {"data": {...}}.
+        data (dict): Fields to update (e.g., amount, status).
     Returns:
-        dict: Updated budget item or {"error": <str>}
+        dict:  with updated budget item or error.
     """
-    # Support both update_budget_item(item_id, amount=100) and update_budget_item(item_id, data={...})
-    fields = kwargs.get("data") if "data" in kwargs and isinstance(kwargs["data"], dict) else kwargs
+    try:
+        if not item_id:
+            raise ("Item ID is required.")
+        if not isinstance(data, dict):
+            raise ("Data must be a dictionary.")
+        if not data:
+            raise ("No fields to update.")
+        set_clauses = [f"{k} = :{k}" for k in data]
+        set_clause = ", ".join(set_clauses)
 
-    if not fields:
-        return {"error": "No fields to update."}
+        sql = f"UPDATE budget_items SET {set_clause} WHERE item_id = :item_id RETURNING *;"
+        params = {**data, "item_id": item_id}
 
-    set_clauses = [f"{k} = :{k}" for k in fields]
-    set_clause = ", ".join(set_clauses)
+        print(f"Executing SQL: {sql} with params: {params}")
 
-    sql = f"UPDATE budget_items SET {set_clause} WHERE item_id = :item_id RETURNING *;"
-    params = {**fields, "item_id": item_id}
+        result = await execute_supabase_sql(sql, params) # type: ignore
 
-    print(f"Executing SQL: {sql} with params: {params}")
+        if isinstance(result, dict) and result.get("rows"):
+            updated_budget_item = result["rows"][0]
+        elif isinstance(result, list) and result:
+            updated_budget_item = result[0]
+        else:
+            raise (f"Updating budget item failed: {result}")
 
-    result = await execute_supabase_sql(sql, params)
+        return {"status": "success", "data": updated_budget_item}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
-    if isinstance(result, dict) and result.get("rows"):
-        return result["rows"][0]
-    elif isinstance(result, list) and result:
-        return result[0]
-    else:
-        print(f"Error updating budget item: {result}")
-        return {"error": f"Updating budget item failed: {result}"}
 
-async def delete_budget_item(item_id: str) -> dict:
+async def delete_budget_item(item_id: str, context: ToolContext = None) -> dict:
     """
     Delete a budget item by item_id.
     Args:
         item_id (str): The budget item's UUID.
     Returns:
-        dict: {"status": "success"} or {"error": <str>}
+        dict:  with success status or error.
     """
-    sql = "DELETE FROM budget_items WHERE item_id = :item_id RETURNING item_id;"
-    params = {"item_id": item_id}
-    print(f"Final SQL for delete_budget_item: {sql} with params: {params}")
-    result = await execute_supabase_sql(sql, params)
-    if isinstance(result, dict) and result.get("rows"):
-        return {"status": "success"}
-    elif isinstance(result, list) and result:
-        return {"status": "success"}
-    return {"error": "Deletion failed."}
+    try:
+        if not item_id:
+            raise ("Item ID is required.")
 
-# --- Astra DB Tools ---
+        sql = "DELETE FROM budget_items WHERE item_id = :item_id RETURNING item_id;"
+        params = {"item_id": item_id}
+        print(f"Final SQL for delete_budget_item: {sql} with params: {params}")
+        result = await execute_supabase_sql(sql, params)
+        if isinstance(result, dict) and result.get("rows"):
+            return {"status": "success"}
+        elif isinstance(result, list) and result:
+            return {"status": "success"}
+        else:
+            raise ("Deletion failed.")
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
-def search_rituals(question: str) -> List[Dict[str, Any]]:
+async def search_rituals(question: str, context: ToolContext = None) -> dict:
     """
     Searches for rituals in Astra DB using vector search.  Returns top 3 most relevant documents.  Handles CollectionExceptions.
     """
     """ input: question - a string containing the user's query about rituals"""
     try:
+        if not question:
+            return {"status": "error", "error": "Question is required."}
+
         ritual_data = astra_db.get_collection("ritual_data")
         result = ritual_data.find(
             projection={"$vectorize": True}, sort={"$vectorize": question}, limit=3
         )
         contexts = [doc for doc in result]
-        return contexts
+        return {"status": "success", "data": contexts}
     except Exception as e:
-        return {"error": f"An unexpected error occurred during ritual search: {e}"}
+        return {"status": "error", "error": f"An unexpected error occurred during ritual search: {e}"}
 
+async def get_timeline_events(
+    user_id: str,
+    context: ToolContext = None
+) -> List[dict]:
+    """
+    Retrieves all timeline events for a given user.
 
+    Args:
+        user_id: The UUID of the user.
+        context: Tool execution context.
 
-# --- AGENT/TOOL PROMPT INPUT/OUTPUT RECOMMENDATIONS (ENHANCED) ---
-# For each tool, specify clear, robust input and output formats for agent use.
-# For agents/sub-agents, specify orchestration and error handling best practices.
+    Returns:
+        A list of dictionaries, where each dictionary represents a timeline event.
+        If no events are found, returns an empty list [].
+        If an error occurs, returns a dictionary with "status": "error" and "error": <description>.
+    """
+    try:
+        # Input validation
+        if not user_id:
+            return {"status": "error", "error": "User ID is required."}
+
+        # Construct the SQL query
+        sql = """
+            SELECT *
+            FROM timeline_events
+            WHERE user_id = :user_id
+        """
+
+        # Prepare the parameters for the SQL query
+        params = {
+            "user_id": user_id,
+        }
+
+        # Execute the SQL query
+        result = await execute_supabase_sql(sql, params)
+
+        # Check if the query was successful
+        if result and isinstance(result, dict) and result.get("rows"):
+            timeline_events = result["rows"]
+            return timeline_events
+        elif isinstance(result, list):
+            return result
+        else:
+            return []  # Return an empty list if no events are found
+
+    except Exception as e:
+        return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
+
+async def create_timeline_event(user_id: str, event: dict, context: ToolContext = None) -> dict:
+    """
+    Create a timeline event for a user.
+    Args:
+        user_id (str): The user's UUID.
+        event (dict): {"event_name": str, "event_date_time": str, "description": str, "location": str}
+    Returns:
+        dict: Inserted timeline event or {"error": <str>}
+    """
+    # Ensure all required fields
+    if not user_id:
+        return {"status": "error", "error": "User ID is required."}
+    if not isinstance(event, dict):
+        return {"status": "error", "error": "Event data must be a dictionary."}
+    if not (event.get("event_name") and event.get("event_date_time")):
+        return {"status": "error", "error": "Missing required fields for timeline event."}
+
+    sql = (
+        "INSERT INTO timeline_events (user_id, event_name, event_date_time, description, location) "
+        "VALUES (:user_id, :event_name, :event_date_time, :description, :location) RETURNING *;"
+    )
+    try:
+        params = {
+            "user_id": user_id,
+            "event_name": event.get("event_name"),
+            "event_date_time": event.get("event_date_time"),
+            "description": event.get("description"),
+            "location": event.get("location")
+        }
+        print(f"Final SQL for create_timeline_event: {sql} with params: {params}")
+        result = await execute_supabase_sql(sql, params)
+        if isinstance(result, dict) and result.get("rows"):
+            return {"status": "success", "data": result["rows"][0]}
+        elif isinstance(result, list) and result:
+            return {"status": "success", "data": result[0]}
+        else:
+            return {"status": "error", "error": "Creating timeline event failed."}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+async def update_timeline_event(
+    event_id: str,
+    updates: Dict[str, Any],
+    context: ToolContext = None  # Add ToolContext with a default value of None
+) -> Dict[str, Any]:
+    """
+    Updates an existing timeline event.
+
+    Args:
+        event_id: The UUID of the timeline event to update.
+        updates: A dictionary containing the fields to update (e.g., event_name, start_time, description) and their new values.
+
+    Returns:
+        A dictionary with the following structure:
+          - "status": "success" or "error"
+          - If "status" is "success":
+            - "data": A dictionary containing the updated event data.
+          - If "status" is "error":
+            - "error": A description of the error.
+
+    Raises:
+        ValueError: If input validation fails.
+        Exception: For database errors.
+    """
+    try:
+        # Input validation
+        if not event_id:
+            raise ValueError("Event ID is required.")
+        if not isinstance(updates, dict):
+            raise ValueError("Updates must be a dictionary.")
+        if not updates:
+            raise ValueError("No fields to update provided.")
+
+        # Construct the SET clause for the SQL query
+        set_clauses = [f"{key} = :{key}" for key in updates]
+        set_clause = ", ".join(set_clauses)
+
+        # Construct the SQL query
+        sql = f"""
+            UPDATE timeline_events
+            SET {set_clause}
+            WHERE event_id = :event_id
+            RETURNING *;
+        """
+
+        # Prepare the parameters for the SQL query
+        params = {
+            "event_id": event_id,
+            **updates,
+        }
+
+        # Execute the SQL query
+        result = await execute_supabase_sql(sql, params)
+
+        # Check if the update was successful
+        if result and isinstance(result, dict) and result.get("rows"):
+            updated_event = result["rows"][0]
+            return {"status": "success", "data": updated_event}
+        elif isinstance(result, list) and result:
+            updated_event = result[0]
+            return {"status": "success", "data": updated_event}
+        else:
+            return {"status": "error", "error": "Event not found or update failed."}
+
+    except ValueError as ve:
+        return {"status": "error", "error": str(ve)}
+    except Exception as e:
+        return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
 # get_user_id
 # Input: {"email": <user_email:str>}
