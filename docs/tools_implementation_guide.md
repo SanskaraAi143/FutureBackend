@@ -140,6 +140,95 @@ async def tool_name(
    - `update_timeline_event`
    - `get_timeline_events`
 
+# get_vendor_availability
+
+## Purpose
+Gets all availability data for a vendor after today's date.
+
+## Security Considerations
+TBD
+
+## Parameters
+- vendor_id (str): The UUID of the vendor.
+
+## Returns
+dict: A dictionary with the following structure:
+  - "status": "success" or "error"
+  - If "status" is "success":
+    - "data": A list of dictionaries, where each dictionary represents an availability entry with `available_date` and `status`.  Each dictionary will have keys `available_date` (string in YYYY-MM-DD format) and `status` (string, e.g., 'available', 'booked_tentative', 'booked_confirmed', 'unavailable_custom').
+  - If "status" is "error":
+    - "error": A description of the error.
+
+## Example Usage
+```python
+availability = await get_vendor_availability(vendor_id="some_vendor_id")
+if availability["status"] == "success":
+    for item in availability["data"]:
+        print(f"Date: {item['available_date']}, Status: {item['status']}")
+else:
+    print(f"Error: {availability['error']}")
+```
+
+## Error Handling
+The tool handles the following errors:
+- Invalid Vendor ID: Returns {"status": "error", "error": "Invalid vendor_id format."}
+- Other exceptions: Returns {"status": "error", "error": str(e)}
+
+## Dependencies
+- Supabase
+
+## Notes
+- This tool relies on the `supabase` client to interact with the Supabase database.
+- It retrieves data from the `vendor_availability` table.
+
+# check_vendor_availability
+
+## Purpose
+Checks if a vendor is available on a specific date, using pre-fetched availability data.
+
+## Security Considerations
+TBD
+
+## Parameters
+- vendor_id (str): The UUID of the vendor (for error reporting, but not used for data fetching).
+- date (str): The date to check availability for (in ISO 8601 format, e.g., "YYYY-MM-DD").
+- availability_data (list): A list of dictionaries, where each dictionary represents an availability entry (the `data` field returned by `get_vendor_availability`).
+
+## Returns
+dict: A dictionary with the following structure:
+  - "status": "success" or "error"
+  - If "status" is "success":
+    - "data": `True` if the vendor is available, `False` otherwise.
+  - If "status" is "error":
+    - "error": A description of the error.
+
+## Example Usage
+```python
+availability_data = await get_vendor_availability(vendor_id="some_vendor_id")
+if availability_data["status"] == "success":
+    is_available = await check_vendor_availability(vendor_id="some_vendor_id", date="2024-07-20", availability_data=availability_data["data"])
+    if is_available["status"] == "success":
+        print(f"Vendor is available: {is_available['data']}")
+    else:
+        print(f"Error checking availability: {is_available['error']}")
+else:
+    print(f"Error getting availability data: {availability_data['error']}")
+```
+
+## Error Handling
+The tool handles the following errors:
+- Invalid Vendor ID: Returns {"status": "error", "error": "Invalid vendor_id format."}
+- Invalid Date Format: Returns {"status": "error", "error": "Invalid date format. Use YYYY-MM-DD."}
+- Invalid availability_data Type: Returns {"status": "error", "error": "availability_data must be a list."}
+- Other exceptions: Returns {"status": "error", "error": str(e)}
+
+## Dependencies
+- None (relies on pre-fetched availability data)
+
+## Notes
+- This tool uses pre-fetched data from `get_vendor_availability` for efficiency.
+- It assumes that if a date is not found in the `availability_data`, the vendor is available on that date.
+
 ## Testing Requirements
 
 Each tool implementation must include:

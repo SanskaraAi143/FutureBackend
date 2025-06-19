@@ -10,7 +10,8 @@
 ### Vendor Management Tools
 - [x] list_vendors(filters: Optional[dict], context: ToolContext) -> ToolResult
 - [x] get_vendor_details(vendor_id: str, context: ToolContext) -> ToolResult
-- [ ] check_vendor_availability(vendor_id: str, date: str) -> bool
+- [x] get_vendor_availability(vendor_id: str) -> dict
+- [x] check_vendor_availability(vendor_id: str, date: str, availability_data: list) -> bool
 - [ ] search_vendors(category: str, location: str, budget_range: dict, ratings: float, keywords: list) -> List[dict]
 - [ ] update_vendor_status(vendor_id: str, status: str) -> dict
 
