@@ -15,33 +15,55 @@ FutureBackend is an AI-powered backend for orchestrating wedding planning workfl
 
 ```
 FutureBackend/
-├── agent.py                # Main entry point for running the agent
-├── config.py               # Configuration utilities
+├── main.py                 # Main entry point for the application
+├── config/                 # Configuration files
+│   ├── settings.py         # Loads environment variables
+│   └── __init__.py
+├── src/                    # Source code
+│   ├── agents/             # ADK agent definitions
+│   │   ├── orchestrator_agent.py
+│   │   ├── onboarding_agent.py
+│   │   └── ...             # Other agents
+│   ├── tools/              # Tools for agents, organized by domain
+│   │   ├── user_tools.py
+│   │   └── ...             # Other tool modules
+│   ├── services/           # Services for interacting with external systems (DBs, APIs)
+│   │   ├── supabase_service.py
+│   │   ├── astradb_service.py
+│   │   └── adk_service.py
+│   ├── core/               # Core business logic or schemas
+│   │   └── schemas.py
+│   └── __init__.py
 ├── requirements.txt        # Python dependencies
 ├── .env.example            # Example environment variables
 ├── .env                    # Your actual environment variables (not committed)
-├── adk_agents/             # Modular agent definitions (onboarding, ritual, budget, vendor)
-├── tools.py                # Tool functions for agents
-├── test_connections.py     # Test DB/API connections
+├── tests/                  # Unit and integration tests
+│   ├── unit/
+│   └── integration/
 ├── examples/               # Example agent flows and scripts
-├── docs/                   # Architecture, MVP, and enhancement docs
-├── utils/                  # SQL schema and utilities
-└── ...
+├── docs/                   # Project documentation
+└── .gitignore
 ```
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in your credentials:
+Copy `.env.example` to `.env` and fill in your credentials. The following variables are essential:
 
-```
-GOOGLE_API_KEY=your_google_api_key
-TAVILY_API_KEY=your_tavily_api_key
-SUPABASE_ACCESS_TOKEN=your_supabase_access_token
-ASTRA_API_TOKEN=your_astra_api_token
-ASTRA_API_ENDPOINT=your_astra_api_endpoint
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_key
-```
+-   `GOOGLE_API_KEY`: Your Google API Key (for Gemini, etc.).
+-   `SUPABASE_URL`: Your Supabase project URL.
+-   `SUPABASE_KEY`: Your Supabase project public API key (anon key).
+-   `SUPABASE_ACCESS_TOKEN`: Your Supabase service role key or a dedicated access token for server-side operations (used by MCP).
+-   `SUPABASE_PROJECT_ID`: Your Supabase project ID (found in your Supabase project settings, required for MCP).
+-   `ASTRA_API_TOKEN`: Your Astra DB Application Token.
+-   `ASTRA_API_ENDPOINT`: Your Astra DB API Endpoint.
+
+Optional variables (see `.env.example` for more and defaults in `config/settings.py`):
+
+-   `TAVILY_API_KEY`: For Tavily search integration, if used.
+-   `ASTRA_DB_ID`: Your Astra database ID.
+-   `ASTRA_DB_REGION`: The region of your Astra database.
+-   `APP_NAME`: Application name override.
+-   `DEFAULT_LLM_MODEL`: Override the default LLM model.
 
 **Never commit your real `.env` file!**
 
@@ -70,23 +92,19 @@ SUPABASE_KEY=your_supabase_key
 
 ## Usage
 
-- **Run the main agent:**
+- **Run the application:**
   ```bash
-  python agent.py
+  python main.py
   ```
-  This will start the orchestrator agent, which manages onboarding, ritual, budget, and vendor flows.
+  This will start the main application, which will initialize and run the orchestrator agent (RootAgent) responsible for managing the various planning flows.
 
-- **Agent Structure:**
-  - `adk_agents/agent.py` defines:
-    - **OnboardingAgent**: Collects user details
-    - **RitualSearchAgent**: Answers ritual questions
-    - **BudgetAgent**: Manages budget setup
-    - **VendorSearchAgent**: Finds and suggests vendors
-    - **RootAgent**: Orchestrates the above agents
-  - Each agent uses tools from `tools.py` and interacts with Supabase/Astra DB as needed.
+- **Agent Structure (under `src/agents/`):**
+  - `orchestrator_agent.py` (or similar, e.g., `root_agent.py`) will define the main **RootAgent**.
+  - Other files like `onboarding_agent.py`, `ritual_agent.py`, `budget_agent.py`, `vendor_search_agent.py` will define the respective sub-agents.
+  - Each agent utilizes tools defined in `src/tools/` (e.g., `user_tools.py`, `budget_tools.py`) which in turn use services from `src/services/` to interact with Supabase, Astra DB, etc.
 
 - **Example flows:**
-  - See `examples/` for sample scripts and flows (e.g., onboarding, vendor search, ritual search).
+  - See `examples/` for sample scripts and flows. These will be updated to reflect the new structure and usage patterns.
 
 ## Documentation
 
