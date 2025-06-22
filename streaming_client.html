@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Streaming AI WebSocket Client</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    #response { border: 1px solid #ccc; padding: 1em; min-height: 2em; margin-top: 1em; }
+    #status { color: green; }
+  </style>
+</head>
+<body>
+  <h2>Conversational AI Streaming Client</h2>
+  <div>
+    <input type="text" id="userInput" placeholder="Type your message..." size="40">
+    <button onclick="sendMessage()">Send</button>
+    <button onclick="startRecording()">🎤 Record</button>
+    <button onclick="stopRecording()">Stop</button>
+    <span id="status"></span>
+  </div>
+  <div id="response"></div>
+  <audio id="audioPlayer" controls style="display:none;"></audio>
+
+  <script>
+    let ws;
+    let responseDiv = document.getElementById('response');
+    let statusSpan = document.getElementById('status');
+    let audioPlayer = document.getElementById('audioPlayer');
+    let mediaRecorder;
+    let audioChunks = [];
+
+    function connect() {
+      ws = new WebSocket('ws://localhost:8000/ws/stream');
+      ws.onopen = () => { statusSpan.textContent = 'Connected'; statusSpan.style.color = 'green'; };
+      ws.onclose = () => { statusSpan.textContent = 'Disconnected'; statusSpan.style.color = 'red'; };
+      ws.onerror = () => { statusSpan.textContent = 'Error'; statusSpan.style.color = 'red'; };
+      ws.onmessage = (event) => {
+        let msg = JSON.parse(event.data);
+        if (msg.type === 'ai_stream_chunk') {
+          if (msg.audio) {
+            // Play audio response
+            let audioData = atob(msg.audio);
+            let arrayBuffer = new Uint8Array([...audioData].map(c => c.charCodeAt(0))).buffer;
+            let blob = new Blob([arrayBuffer], { type: 'audio/wav' });
+            let url = URL.createObjectURL(blob);
+            audioPlayer.src = url;
+            audioPlayer.style.display = 'block';
+            audioPlayer.play();
+          } else {
+            responseDiv.innerHTML += msg.chunk;
+            if (msg.is_final) {
+              responseDiv.innerHTML += '<br><em>AI response complete.</em>';
+            }
+          }
+        } else if (msg.type === 'error') {
+          responseDiv.innerHTML += '<br><span style="color:red">Error: ' + msg.message + '</span>';
+        }
+      };
+    }
+
+    function sendMessage() {
+      let input = document.getElementById('userInput');
+      let text = input.value.trim();
+      if (!text || ws.readyState !== 1) return;
+      responseDiv.innerHTML = '';
+      let msg = { type: 'user_utterance', text: text };
+      ws.send(JSON.stringify(msg));
+      input.value = '';
+    }
+
+    function startRecording() {
+      if (!navigator.mediaDevices) return alert('Audio not supported');
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          mediaRecorder = new MediaRecorder(stream);
+          audioChunks = [];
+          mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+          mediaRecorder.onstop = () => {
+            let audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            let reader = new FileReader();
+            reader.onloadend = function() {
+              let base64Audio = reader.result.split(',')[1];
+              let msg = { type: 'user_utterance', audio: base64Audio };
+              ws.send(JSON.stringify(msg));
+              responseDiv.innerHTML = '';
+            };
+            reader.readAsDataURL(audioBlob);
+          };
+          mediaRecorder.start();
+        });
+    }
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+    }
+    connect();
+  </script>
+</body>
+</html>
