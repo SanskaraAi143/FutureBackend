@@ -1,21 +1,17 @@
 import os
 import logging
 import uvicorn
-import sqlite3
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
-from google.adk.sessions import DatabaseSessionService
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Get the directory where main.py is located
 AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
 logging.info(f"Agent directory: {AGENT_DIR}")
-
-# Session DB URL (SQLite)
+# Example session DB URL (e.g., SQLite)
 SESSION_DB_URL = os.getenv("SESSION_DB_URL", "sqlite:///./sessions.db")
-
 # Allow CORS for localhost:8030
 import json
 
@@ -29,8 +25,8 @@ except json.JSONDecodeError:
 SERVE_WEB_INTERFACE_STR = os.getenv("SERVE_WEB_INTERFACE", "True")
 SERVE_WEB_INTERFACE = SERVE_WEB_INTERFACE_STR.lower() == "true"
 
-# Initialize SQLite database and session service
 try:
+<<<<<<< HEAD
     # Ensure the directory for the database exists
     db_path = SESSION_DB_URL.replace("sqlite:///", "")
     db_dir = os.path.dirname(db_path)
@@ -40,6 +36,8 @@ try:
     # Initialize the session service
     session_service = DatabaseSessionService(db_url=SESSION_DB_URL)
 
+=======
+>>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
     # Call the function to get the FastAPI app instance
     app: FastAPI = get_fast_api_app(
         agents_dir=AGENT_DIR,

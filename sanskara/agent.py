@@ -83,6 +83,7 @@ ritual_search_agent = LlmAgent(
     description="Handles ritual search.",
     instruction=RITUAL_PROMPT,
     tools=[search_rituals],
+<<<<<<< HEAD
     output_key="ritual_search_state",
     
 )
@@ -136,6 +137,14 @@ ritual_search_agent = LlmAgent(
     instruction=RITUAL_PROMPT,
     tools=[search_rituals],
     output_key="ritual_search_state",
+=======
+    before_agent_callback=opik_tracer.before_agent_callback,
+    after_agent_callback=opik_tracer.after_agent_callback,
+    before_model_callback=opik_tracer.before_model_callback,
+    after_model_callback=opik_tracer.after_model_callback,
+    before_tool_callback=opik_tracer.before_tool_callback,
+    after_tool_callback=opik_tracer.after_tool_callback,
+>>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
 )
 
 BUDGET_PROMPT = (
@@ -166,8 +175,17 @@ budget_agent = LlmAgent(
         get_user_data,
         update_user_data
     ],
+<<<<<<< HEAD
     output_key="budget_state",
 
+=======
+    before_agent_callback=opik_tracer.before_agent_callback,
+    after_agent_callback=opik_tracer.after_agent_callback,
+    before_model_callback=opik_tracer.before_model_callback,
+    after_model_callback=opik_tracer.after_model_callback,
+    before_tool_callback=opik_tracer.before_tool_callback,
+    after_tool_callback=opik_tracer.after_tool_callback,
+>>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
 )
 
 VENDOR_PROMPT = (
@@ -194,7 +212,16 @@ vendor_search_agent = LlmAgent(
         list_vendors,
         get_vendor_details
     ],
+<<<<<<< HEAD
     output_key="vendor_search_state",
+=======
+    before_agent_callback=opik_tracer.before_agent_callback,
+    after_agent_callback=opik_tracer.after_agent_callback,
+    before_model_callback=opik_tracer.before_model_callback,
+    after_model_callback=opik_tracer.after_model_callback,
+    before_tool_callback=opik_tracer.before_tool_callback,
+    after_tool_callback=opik_tracer.after_tool_callback,
+>>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
 )
 
 # --- Root Agent ---
@@ -232,8 +259,17 @@ root_agent = LlmAgent(
         budget_agent,
         vendor_search_agent
     ],
+<<<<<<< HEAD
     output_key="session_preferences",
 
+=======
+    before_agent_callback=opik_tracer.before_agent_callback,
+    after_agent_callback=opik_tracer.after_agent_callback,
+    before_model_callback=opik_tracer.before_model_callback,
+    after_model_callback=opik_tracer.after_model_callback,
+    before_tool_callback=opik_tracer.before_tool_callback,
+    after_tool_callback=opik_tracer.after_tool_callback,
+>>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
 )
 
 
