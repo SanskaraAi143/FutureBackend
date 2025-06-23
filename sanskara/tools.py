@@ -3,7 +3,7 @@
 from typing import List, Dict, Any, Optional
 from google.adk.tools import  ToolContext, LongRunningFunctionTool
 from google.adk.tools.google_search_tool import GoogleSearchTool
-from sanskara.config import astra_db, supabase # Import configured clients
+from sanskara.config import astra_db # Import configured clients
 from typing import Optional
 import json
 import os
@@ -443,20 +443,19 @@ async def create_timeline_event(user_id: str, event: dict, context: ToolContext 
         print(f"Final SQL for create_timeline_event: {sql} with params: {params}")
         result = await execute_supabase_sql(sql, params)
         if isinstance(result, dict) and result.get("rows"):
-            timeline_event = result["rows"][0]
+            return {"status": "success", "data": result["rows"][0]}
         elif isinstance(result, list) and result:
-            timeline_event = result[0]
+            return {"status": "success", "data": result[0]}
         else:
             return {"status": "error", "error": "Creating timeline event failed."}
-        return {"status": "success", "data": timeline_event}
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
 async def update_timeline_event(
     event_id: str,
     updates: Dict[str, Any],
-    context: ToolContext = None
-) -> dict:
+    context: ToolContext = None  # Add ToolContext with a default value of None
+) -> Dict[str, Any]:
     """
     Updates an existing timeline event.
 
@@ -471,15 +470,19 @@ async def update_timeline_event(
             - "data": A dictionary containing the updated event data.
           - If "status" is "error":
             - "error": A description of the error.
+
+    Raises:
+        ValueError: If input validation fails.
+        Exception: For database errors.
     """
     try:
         # Input validation
         if not event_id:
-            return {"status": "error", "error": "Event ID is required."}
+            raise ValueError("Event ID is required.")
         if not isinstance(updates, dict):
-            return {"status": "error", "error": "Updates must be a dictionary."}
+            raise ValueError("Updates must be a dictionary.")
         if not updates:
-            return {"status": "error", "error": "No fields to update provided."}
+            raise ValueError("No fields to update provided.")
 
         # Construct the SET clause for the SQL query
         set_clauses = [f"{key} = :{key}" for key in updates]
@@ -505,13 +508,15 @@ async def update_timeline_event(
         # Check if the update was successful
         if result and isinstance(result, dict) and result.get("rows"):
             updated_event = result["rows"][0]
+            return {"status": "success", "data": updated_event}
         elif isinstance(result, list) and result:
             updated_event = result[0]
+            return {"status": "success", "data": updated_event}
         else:
             return {"status": "error", "error": "Event not found or update failed."}
 
-        return {"status": "success", "data": updated_event}
-
+    except ValueError as ve:
+        return {"status": "error", "error": str(ve)}
     except Exception as e:
         return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
@@ -554,28 +559,6 @@ async def update_timeline_event(
 # delete_budget_item
 # Input: {"item_id": <uuid>}
 # Output: {"status": "success"} or {"error": <str>}
-
-async def get_user_activities(user_id: str, context: ToolContext = None) -> list:
-    """
-    Get all user activities for a user.
-    Args:
-        user_id (str): The user's UUID.
-    Returns:
-        list: List of activity dicts.
-    """
-    sql = """
-        SELECT cm.*
-        FROM chat_sessions cs
-        JOIN chat_messages cm ON cs.session_id = cm.session_id
-        WHERE cs.user_id = :user_id
-        ORDER BY cm.timestamp DESC;
-    """
-    result = await execute_supabase_sql(sql, {"user_id": user_id})
-    if isinstance(result, dict) and result.get("rows"):
-        return result["rows"]
-    elif isinstance(result, list):
-        return result
-    return []
 
 if __name__ == "__main__":
     # Example usage
