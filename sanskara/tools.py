@@ -49,8 +49,10 @@ def sql_quote_value(val):
     if isinstance(val, (int, float)):
         return str(val)
     if isinstance(val, dict) or isinstance(val, list):
-        return f"'{json.dumps(val).replace("'", "''")}'"
-    return f"'{str(val).replace("'", "''")}'"
+        val = json.dumps(val).replace("'", "''")
+        return f"'{val}'"
+    val = str(val).replace("'", "''")
+    return f"'{val}'"
 
 async def execute_supabase_sql(sql: str, params: dict = None):
     """
