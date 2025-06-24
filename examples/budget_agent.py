@@ -1,6 +1,6 @@
 # Budget Agent Utility (Supabase)
 from typing import Dict, Any, List, Optional
-from config import supabase  # Use supabase client from config.py
+from multi_agent_orchestrator.config import supabase  # Use supabase client from config.py
 
 
 def set_user_budget(user_id: str, budget_min: str, budget_max: str) -> Dict[str, Any]:

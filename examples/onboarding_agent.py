@@ -3,7 +3,7 @@ from typing import Dict, Any
 import os
 
 # Import Supabase config from config.py
-from config import supabase  # Use supabase client from config.py
+from multi_agent_orchestrator.config import supabase  # Use supabase client from config.py
 
 def onboard_user(user_id: str, onboarding_data: Dict[str, Any]) -> Dict[str, Any]:
     """

@@ -1,4 +1,4 @@
-from config import supabase
+from multi_agent_orchestrator.config import supabase
 
 # Fetch and print all vendor data from Supabase
 try:
