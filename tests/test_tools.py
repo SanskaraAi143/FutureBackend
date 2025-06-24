@@ -12,8 +12,8 @@ from sanskara.tools import (
 
 # Test config (replace with real test data as needed)
 TEST_EMAIL = "kpuneeth714@gmail.com"
-TEST_USER_ID = "fbfc7af6-9754-4660-a2d6-7fce520351dd"
-TEST_VENDOR_ID = "225cba36-431d-437b-ba02-6be42238e8a7"
+TEST_USER_ID = "fca04215-2af3-4a4e-bcfa-c27a4f54474c"
+TEST_VENDOR_ID = "d1788d53-89db-4e8f-b616-a9ab5e2da723"
 
 @pytest.mark.asyncio
 async def test_get_user_id():

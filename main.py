@@ -26,7 +26,6 @@ SERVE_WEB_INTERFACE_STR = os.getenv("SERVE_WEB_INTERFACE", "True")
 SERVE_WEB_INTERFACE = SERVE_WEB_INTERFACE_STR.lower() == "true"
 
 try:
-<<<<<<< HEAD
     # Ensure the directory for the database exists
     db_path = SESSION_DB_URL.replace("sqlite:///", "")
     db_dir = os.path.dirname(db_path)
@@ -34,14 +33,12 @@ try:
         os.makedirs(db_dir, exist_ok=True)
 
     # Initialize the session service
-    session_service = DatabaseSessionService(db_url=SESSION_DB_URL)
+    #session_service = DatabaseSessionService(db_url=SESSION_DB_URL)
 
-=======
->>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
     # Call the function to get the FastAPI app instance
     app: FastAPI = get_fast_api_app(
         agents_dir=AGENT_DIR,
-        session_db_url=SESSION_DB_URL,
+        session_service_uri=SESSION_DB_URL,
         allow_origins=ALLOWED_ORIGINS,
         web=SERVE_WEB_INTERFACE,
     )

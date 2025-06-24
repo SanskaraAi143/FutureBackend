@@ -81,12 +81,30 @@ def test_budget_agent_tools():
 
 @pytest.mark.asyncio
 def test_vendor_search_agent_tools():
-    from .tools import list_vendors, get_vendor_details
+    from .tools import list_vendors, get_vendor_details, search_vendors
     async def run():
         vendors = await list_vendors({"vendor_category": "Venue", "address->>city": "Bangalore"})
         assert isinstance(vendors, list) or vendors is None
         details = await get_vendor_details("1")
         assert isinstance(details, dict) or details is None
+        
+        # Add a test for search_vendors
+        # search_results = await search_vendors(category="Venue", location="Bangalore", budget_range={"min": 1000, "max": 5000}, ratings=4.0, keywords=["rustic", "vintage"])
+        # assert isinstance(search_results, list) or (isinstance(search_results, dict) and search_results.get("status") == "error")
+        # if isinstance(search_results, list):
+        #     # Basic check:  Ensure results are not empty (if data exists)
+        #     # and that each result is a dictionary.
+        #     if search_results:
+        #         assert isinstance(search_results[0], dict)
+        
+        search_results = await search_vendors(category="Venue", location="Bangalore", budget_range={"min": 1000, "max": 5000}, ratings=4.0, keywords=["rustic", "vintage"])
+        assert isinstance(search_results, list) or (isinstance(search_results, dict) and search_results.get("status") == "error")
+        if isinstance(search_results, list):
+            # Basic check:  Ensure results are not empty (if data exists)
+            # and that each result is a dictionary.
+            if search_results:
+                assert isinstance(search_results[0], dict)
+        pass
     asyncio.run(run())
 
 @pytest.mark.asyncio

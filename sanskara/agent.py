@@ -55,7 +55,7 @@ ONBOARDING_PROMPT = (
 
 onboarding_agent = LlmAgent(
     name="OnboardingAgent",
-    model="gemini-1.5-flash",
+    model="gemini-2.0-flash",
     description="Handles user onboarding.",
     instruction=ONBOARDING_PROMPT,
     tools=[get_user_id, get_user_data, update_user_data],
@@ -79,73 +79,14 @@ RITUAL_PROMPT = (
 
 ritual_search_agent = LlmAgent(
     name="RitualSearchAgent",
-    model="gemini-1.5-flash",
+    model="gemini-2.0-flash",
     description="Handles ritual search.",
     instruction=RITUAL_PROMPT,
     tools=[search_rituals],
-<<<<<<< HEAD
     output_key="ritual_search_state",
     
 )
 
-# --- Sub-Agents ---
-
-ONBOARDING_PROMPT = (
-    """You are the Onboarding Agent for Sanskara AI.
-    You are provided with the user's email address. Your job is to:
-    1. Get the user ID using the email address.
-    2. Get the user data using the user ID.
-    3. Collect and confirm all required user details for wedding planning in as few steps as possible.
-    When requesting information, always ask for multiple related fields together (e.g., name, email, wedding date, culture, region, etc.) to minimize back-and-forth.
-    If any information is already available in session.state, use it to pre-fill or skip questions.
-    IMPORTANT: Only write to the following top-level fields in the users table: display_name, wedding_date, wedding_location, wedding_tradition, user_type. All other user attributes (such as caste, culture, region, budget, guest count, etc.) MUST be stored inside the preferences dictionary. Do NOT attempt to write any other fields at the top level.
-    You must collect: full name, email, wedding date (or preferred month/year), culture, caste, region, estimated budget, guest count, and location.
-    If the user's name is available in the session.state, greet them by name.
-    If the user's email is available in the session.state, ask them to confirm it.
-    If above information is already available, show it to the user and transfer control to the orchestrator agent.
-    When onboarding is complete, update session.state with the user's name, email, wedding date, culture, caste, region, estimated budget, guest count, and location, confirm all collected details, and transfer control back to the Orchestrator."""
-)
-
-onboarding_agent = LlmAgent(
-    name="OnboardingAgent",
-    model="gemini-1.5-flash",
-    description="Handles user onboarding.",
-    instruction=ONBOARDING_PROMPT,
-    tools=[get_user_id, get_user_data, update_user_data],
-    output_key="onboarding_state",
-)
-
-RITUAL_PROMPT = (
-    "You are the Ritual Agent for Sanskara AI."
-    "You are a professional expert in Hindu wedding rituals, and your role is to provide accurate and culturally relevant information about these rituals."
-    "When called, check session.state for the user's culture, caste, and region, and use this information to tailor your responses. If this information is not available in session.state, use your tools to retrieve it."
-    "Your job is to provide clear, concise, and culturally accurate information about Hindu wedding rituals, based strictly on the user's culture, caste, and region."
-    "List the most relevant rituals, explain their significance, and answer questions about them."
-    "If asked for samagri (items) or specific timings, explain that a Pandit should be consulted for exact details. "
-    "Use your tools to search for rituals in the database. "
-    "Never answer questions outside of rituals. If asked, you must redirect to the relevant agent. "
-    "All data access is performed using robust, async tools for reliability. "
-    "Before using tools, check session.state for existing values."
-    "After completing the ritual search, update session.state with only details which capture user needs."
-    "Always format your answers for clarity and completeness."
-)
-
-ritual_search_agent = LlmAgent(
-    name="RitualSearchAgent",
-    model="gemini-1.5-flash",
-    description="Handles ritual search.",
-    instruction=RITUAL_PROMPT,
-    tools=[search_rituals],
-    output_key="ritual_search_state",
-=======
-    before_agent_callback=opik_tracer.before_agent_callback,
-    after_agent_callback=opik_tracer.after_agent_callback,
-    before_model_callback=opik_tracer.before_model_callback,
-    after_model_callback=opik_tracer.after_model_callback,
-    before_tool_callback=opik_tracer.before_tool_callback,
-    after_tool_callback=opik_tracer.after_tool_callback,
->>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
-)
 
 BUDGET_PROMPT = (
     "You are the Budget Agent for Sanskara AI. "
@@ -164,7 +105,7 @@ BUDGET_PROMPT = (
 
 budget_agent = LlmAgent(
     name="BudgetAgent",
-    model="gemini-1.5-flash",
+    model="gemini-2.0-flash",
     description="Handles budget management.",
     instruction=BUDGET_PROMPT,
     tools=[
@@ -175,17 +116,8 @@ budget_agent = LlmAgent(
         get_user_data,
         update_user_data
     ],
-<<<<<<< HEAD
     output_key="budget_state",
 
-=======
-    before_agent_callback=opik_tracer.before_agent_callback,
-    after_agent_callback=opik_tracer.after_agent_callback,
-    before_model_callback=opik_tracer.before_model_callback,
-    after_model_callback=opik_tracer.after_model_callback,
-    before_tool_callback=opik_tracer.before_tool_callback,
-    after_tool_callback=opik_tracer.after_tool_callback,
->>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
 )
 
 VENDOR_PROMPT = (
@@ -205,23 +137,14 @@ VENDOR_PROMPT = (
 
 vendor_search_agent = LlmAgent(
     name="VendorSearchAgent",
-    model="gemini-1.5-flash",
+    model="gemini-2.0-flash",
     description="Handles vendor search.",
     instruction=VENDOR_PROMPT,
     tools=[
         list_vendors,
         get_vendor_details
     ],
-<<<<<<< HEAD
     output_key="vendor_search_state",
-=======
-    before_agent_callback=opik_tracer.before_agent_callback,
-    after_agent_callback=opik_tracer.after_agent_callback,
-    before_model_callback=opik_tracer.before_model_callback,
-    after_model_callback=opik_tracer.after_model_callback,
-    before_tool_callback=opik_tracer.before_tool_callback,
-    after_tool_callback=opik_tracer.after_tool_callback,
->>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
 )
 
 # --- Root Agent ---
@@ -250,7 +173,7 @@ ORCHESTRATOR_PROMPT = (
 
 root_agent = LlmAgent(
     name="RootAgent",
-    model="gemini-1.5-flash",
+    model="gemini-2.0-flash",
     description="Orchestrates the entire user workflow for Sanskara AI, including onboarding, ritual search, budget management, and vendor search. The user only interacts with this agent.",
     instruction=ORCHESTRATOR_PROMPT,
     sub_agents=[
@@ -259,17 +182,8 @@ root_agent = LlmAgent(
         budget_agent,
         vendor_search_agent
     ],
-<<<<<<< HEAD
     output_key="session_preferences",
 
-=======
-    before_agent_callback=opik_tracer.before_agent_callback,
-    after_agent_callback=opik_tracer.after_agent_callback,
-    before_model_callback=opik_tracer.before_model_callback,
-    after_model_callback=opik_tracer.after_model_callback,
-    before_tool_callback=opik_tracer.before_tool_callback,
-    after_tool_callback=opik_tracer.after_tool_callback,
->>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
 )
 
 

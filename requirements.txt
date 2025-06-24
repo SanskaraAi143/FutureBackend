@@ -8,3 +8,5 @@ astrapy
 pytest
 pytest-asyncio
 google-adk[eval]
+litellm>=1.37.0
+groq

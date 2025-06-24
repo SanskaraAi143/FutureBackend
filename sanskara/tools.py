@@ -10,7 +10,8 @@ import os
 import asyncio
 import dotenv
 import ast
-from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters
+import re
+from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters,StdioConnectionParams
 
 dotenv.load_dotenv('.env')
 SUPABASE_ACCESS_TOKEN = os.getenv("SUPABASE_ACCESS_TOKEN")
@@ -24,11 +25,12 @@ async def init_supabase_mcp():
     if _supabase_mcp_toolset is None:
         mcp = MCPToolset(
             connection_params=StdioServerParameters(
-                command='npx',
+                command='/usr/bin/npx',
                 args=["-y", "@supabase/mcp-server-supabase@latest", "--access-token", SUPABASE_ACCESS_TOKEN],
             ),
             tool_filter=["execute_sql"]
         )
+        
         tools = await mcp.get_tools()
         _supabase_mcp_toolset = mcp
         _supabase_tools = {tool.name: tool for tool in tools}
@@ -78,6 +80,12 @@ async def execute_supabase_sql(sql: str, params: dict = None):
         print(f"[MCP SQL DEBUG] Raw result from MCP: {result}") # Added logging
         if hasattr(result, "content") and result.content:
             text = result.content[0].text if hasattr(result.content[0], "text") else str(result.content[0])
+            # Try to extract untrusted JSON if present
+            untrusted_json = extract_untrusted_json(text)
+            print(f"untrusted_json: {untrusted_json}")  # Debug log for untrusted JSON
+            if untrusted_json is not None:
+                print(f"[MCP SQL DEBUG] Extracted untrusted JSON: {untrusted_json}")
+                return untrusted_json
             try:
                 parsed = json.loads(text)
                 return parsed
@@ -110,9 +118,9 @@ async def get_user_id(email: str) -> dict:
         return result["rows"][0]
     elif isinstance(result, list) and result:
         return result[0]
-    return {"error": "User not found."}
+    return {"error": f"User not found. {result}"}
 
-async def get_user_data(user_id: str, tool_context: ToolContext = None) -> dict:
+async def get_user_data(user_id: str) -> dict:
     """
     Get all user data for a given user_id from the users table.
     Args:
@@ -125,20 +133,15 @@ async def get_user_data(user_id: str, tool_context: ToolContext = None) -> dict:
     if isinstance(result, dict) and result.get("rows"):
         return result["rows"][0]
     elif isinstance(result, list) and result:
-<<<<<<< HEAD
         user_data = result[0]
     else:
         user_data = {"error": "User not found."}
 
     return user_data
-=======
-        return result[0]
-    return {"error": "User not found."}
->>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
 
-async def update_user_data(user_id: str, data: dict, tool_context: ToolContext = None) -> dict:
+async def update_user_data(user_id: str, data: dict) -> dict:
     """
-    Update user data for a given user_id. Only allowed columns are updated; extra fields go into preferences.
+    Update user data for a given user_id. Only allowed columns are updated; extra fields go into preferences, user_type is cannot be updated.
     Args:
         user_id (str): The user's UUID.
         data (dict): Fields to update (top-level or preferences).
@@ -173,16 +176,11 @@ async def update_user_data(user_id: str, data: dict, tool_context: ToolContext =
     if result and isinstance(result, dict) and result.get("rows"):
         return result["rows"][0]
     elif isinstance(result, list) and result:
-<<<<<<< HEAD
         updated_user_data = result[0]
     else:
         updated_user_data = {"error": "Update failed."}
 
     return updated_user_data
-=======
-        return result[0]
-    return {"error": "Update failed."}
->>>>>>> parent of 6547be4 (Refactor: Integrate DatabaseSessionService and improve DB handling)
 
 async def list_vendors(filters: Optional[dict] = None) -> list:
     """
@@ -212,7 +210,7 @@ async def list_vendors(filters: Optional[dict] = None) -> list:
         return result
     return []
 
-async def get_vendor_details(vendor_id: str, tool_context : ToolContext = None) -> dict:
+async def get_vendor_details(vendor_id: str) -> dict:
     """
     Get all details for a vendor by vendor_id.
     Args:
@@ -279,7 +277,7 @@ async def get_budget_items(user_id: str) -> list:
         return result
     return []
 
-async def update_budget_item(item_id: str, data: dict, context: ToolContext = None) -> dict:
+async def update_budget_item(item_id: str, data: dict) -> dict:
     """
     Update a budget item by item_id.
     Args:
@@ -317,7 +315,7 @@ async def update_budget_item(item_id: str, data: dict, context: ToolContext = No
         return {"status": "error", "error": str(e)}
 
 
-async def delete_budget_item(item_id: str, context: ToolContext = None) -> dict:
+async def delete_budget_item(item_id: str) -> dict:
     """
     Delete a budget item by item_id.
     Args:
@@ -342,7 +340,7 @@ async def delete_budget_item(item_id: str, context: ToolContext = None) -> dict:
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
-async def search_rituals(question: str, context: ToolContext = None) -> dict:
+async def search_rituals(question: str) -> dict:
     """
     Searches for rituals in Astra DB using vector search.  Returns top 3 most relevant documents.  Handles CollectionExceptions.
     """
@@ -365,7 +363,7 @@ async def search_rituals(question: str, context: ToolContext = None) -> dict:
 
 async def get_timeline_events(
     user_id: str,
-    context: ToolContext = None
+    
 ) -> List[dict]:
     """
     Retrieves all timeline events for a given user.
@@ -411,7 +409,7 @@ async def get_timeline_events(
     except Exception as e:
         return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
-async def create_timeline_event(user_id: str, event: dict, context: ToolContext = None) -> dict:
+async def create_timeline_event(user_id: str, event: dict) -> dict:
     """
     Create a timeline event for a user.
     Args:
@@ -453,9 +451,8 @@ async def create_timeline_event(user_id: str, event: dict, context: ToolContext 
 
 async def update_timeline_event(
     event_id: str,
-    updates: Dict[str, Any],
-    context: ToolContext = None  # Add ToolContext with a default value of None
-) -> Dict[str, Any]:
+    updates: Dict[str, Any]
+) -> dict:
     """
     Updates an existing timeline event.
 
@@ -520,6 +517,28 @@ async def update_timeline_event(
     except Exception as e:
         return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
+def extract_untrusted_json(result_text: str) -> Optional[Any]:
+    """
+    Extract and parse JSON array from within the result string using regex \[.*\].
+    Handles escaped double quotes.
+    Args:
+        result_text (str): The result string containing the JSON array.
+    Returns:
+        Parsed JSON data (list or dict), or None if not found/parsable.
+    """
+    match = re.search(r"\[.*\]", result_text, re.DOTALL)
+    if match:
+        json_str = match.group(0).strip()
+        # Unescape double quotes if present
+        if '\\"' in json_str:
+            json_str = json_str.replace('\\"', '"')
+        try:
+            return json.loads(json_str)
+        except Exception as e:
+            print(f"[extract_untrusted_json] JSON parsing failed: {e}\njson_str: {json_str}")
+            return None
+    return None
+
 # get_user_id
 # Input: {"email": <user_email:str>}
 # Output: {"user_id": <uuid>} or {"error": <str>}
@@ -559,6 +578,83 @@ async def update_timeline_event(
 # delete_budget_item
 # Input: {"item_id": <uuid>}
 # Output: {"status": "success"} or {"error": <str>}
+
+async def get_user_activities(user_id: str) -> list:
+    """
+    Get all user activities for a user.
+    Args:
+        user_id (str): The user's UUID.
+    Returns:
+        list: List of activity dicts.
+    """
+    sql = """
+        SELECT cm.*
+        FROM chat_sessions cs
+        JOIN chat_messages cm ON cs.session_id = cm.session_id
+        WHERE cs.user_id = :user_id
+        ORDER BY cm.timestamp DESC;
+    """
+    result = await execute_supabase_sql(sql, {"user_id": user_id})
+    if isinstance(result, dict) and result.get("rows"):
+        return result["rows"]
+    elif isinstance(result, list):
+        return result
+    return []
+
+async def search_vendors(
+    category: str = None,
+    location: str = None,
+    budget_range: dict = None,
+    ratings: float = None,
+    keywords: list = None,
+    
+) -> list:
+    """
+    Search vendors based on various criteria, including full-text search.
+    Args:
+        category (str, optional): Vendor category.
+        location (str, optional): Vendor location.
+        budget_range (dict, optional): Budget range ({"min": float, "max": float}).
+        ratings (float, optional): Minimum vendor rating.
+        keywords (list, optional): List of keywords for full-text search.
+    Returns:
+        list: List of vendor dicts matching the criteria.
+    """
+    sql = "SELECT * FROM vendors WHERE TRUE"  # Start with a base query
+    params = {}
+    where_clauses = []
+
+    if category:
+        where_clauses.append("vendor_category ILIKE :category")
+        params["category"] = f"%{category}%"
+    if location:
+        where_clauses.append("address->>'city' ILIKE :location")
+        params["location"] = f"%{location}%"
+    if budget_range:
+        if "min" in budget_range:
+            where_clauses.append("price >= :min_price")
+            params["min_price"] = budget_range["min"]
+        if "max" in budget_range:
+            where_clauses.append("price <= :max_price")
+            params["max_price"] = budget_range["max"]
+    if ratings:
+        where_clauses.append("rating >= :min_rating")
+        params["min_rating"] = ratings
+    # Full-text search using keywords
+    if keywords:
+        keywords_str = " & ".join(keywords)  # Combine keywords for tsquery
+        where_clauses.append("fts_data @@ to_tsquery('english', :keywords)")
+        params["keywords"] = keywords_str
+
+    if where_clauses:
+        sql += " AND " + " AND ".join(where_clauses)
+
+    result = await execute_supabase_sql(sql, params)
+    if isinstance(result, dict) and result.get("rows"):
+        return result["rows"]
+    elif isinstance(result, list):
+        return result
+    return []
 
 if __name__ == "__main__":
     # Example usage
