@@ -1,0 +1,9 @@
+# README for Requirements
+
+This file lists the Python dependencies for the multi-agent orchestrator system.
+
+- Use `pip install -r requirements.txt` to install dependencies.
+- Add or update dependencies as needed for orchestrator, agents, and tools.
+
+# Requirements for multi-agent orchestrator
+# Add your dependencies here
