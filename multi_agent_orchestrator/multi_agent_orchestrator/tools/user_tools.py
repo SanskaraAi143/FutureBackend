@@ -1,129 +1,307 @@
-import json # For logging params if needed
+import json
+import logging
 from typing import List, Dict, Any, Optional
-from multi_agent_orchestrator.multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql, sql_quote_value # Adjusted import
+from google.adk.tools import ToolContext # For type hinting context, though not strictly used yet
 
-async def get_user_id(email: str) -> dict:
+from multi_agent_orchestrator.multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql
+
+# Configure logging for this module
+logger = logging.getLogger(__name__)
+
+async def get_user_id(email: str) -> Dict[str, Any]: # Removed context
     """
-    Get the user_id for a given email from the users table.
+    Retrieves the user_id for a given email from the users table.
+
     Args:
-        email (str): The user's email address.
+        email (str): The user's email address. Must be a non-empty string.
+        # context (Optional[ToolContext]): The ADK ToolContext, if available. (Removed for schema compatibility)
+
     Returns:
-        dict: {"user_id": <uuid>} or {"error": <str>}
+        Dict[str, Any]:
+            On success: `{"status": "success", "data": {"user_id": "uuid-string"}}`
+            On failure: `{"status": "error", "error": "Error message"}`
+            If user not found: `{"status": "error", "error": "User not found."}` (or similar)
+
+    Error Handling:
+        - Returns an error dict if email is invalid.
+        - Returns an error dict if the database query fails or returns an unexpected format.
+        - Logs errors using the standard logger.
+
+    Dependencies:
+        - `execute_supabase_sql` from `shared_libraries.helpers`.
+
+    Example Usage:
+        ```python
+        user_info = await get_user_id("test@example.com")
+        if user_info["status"] == "success":
+            user_id = user_info["data"]["user_id"]
+            print(f"User ID: {user_id}")
+        else:
+            print(f"Error: {user_info['error']}")
+        ```
     """
+    if not email or not isinstance(email, str):
+        logger.error("get_user_id: Invalid email provided.")
+        return {"status": "error", "error": "Invalid email provided. Email must be a non-empty string."}
+
+    logger.info(f"get_user_id: Attempting to get user_id for email: {email}")
     sql = "SELECT user_id FROM users WHERE email = :email LIMIT 1;"
-    # print(f"Executing SQL: {sql} with params: {json.dumps({'email': email})}")
-    result = await execute_supabase_sql(sql, {"email": email})
-    # print(f"Result from get_user_id: {result}")
-    if isinstance(result, list) and result: # MCP often returns a list of rows
-        return result[0]
-    elif isinstance(result, dict) and result.get("rows"): # Older direct Supabase client style
-         return result["rows"][0]
-    elif isinstance(result, dict) and "user_id" in result: # If it's already the flat dict
-        return result
-    return {"error": f"User not found or unexpected result format. Result: {result}"}
 
-async def get_user_data(user_id: str) -> dict:
+    try:
+        result = await execute_supabase_sql(sql, {"email": email})
+
+        if isinstance(result, dict) and "error" in result: # Error from execute_supabase_sql
+            logger.error(f"get_user_id: Database error for email {email}: {result['error']}")
+            return {"status": "error", "error": result['error']}
+
+        user_data = None
+        if isinstance(result, list) and result:
+            user_data = result[0]
+        elif isinstance(result, dict) and result.get("rows") and result["rows"]: # Should be covered by list case with MCP
+            user_data = result["rows"][0]
+        elif isinstance(result, dict) and "user_id" in result: # Direct dict if MCP returns single object
+             user_data = result
+
+        if user_data and "user_id" in user_data:
+            logger.info(f"get_user_id: Successfully found user_id for email {email}.")
+            return {"status": "success", "data": {"user_id": user_data["user_id"]}}
+        else:
+            logger.warning(f"get_user_id: User not found for email {email}. Result: {result}")
+            return {"status": "error", "error": "User not found."}
+
+    except Exception as e:
+        logger.exception(f"get_user_id: Unexpected error for email {email}: {e}")
+        return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
+
+
+async def get_user_data(user_id: str) -> Dict[str, Any]: # Removed context
     """
-    Get all user data for a given user_id from the users table.
+    Retrieves all user data for a given user_id from the users table.
+
     Args:
-        user_id (str): The user's UUID.
+        user_id (str): The user's UUID. Must be a non-empty string.
+        # context (Optional[ToolContext]): The ADK ToolContext. (Removed for schema compatibility)
+
     Returns:
-        dict: User data dict or {"error": <str>}
+        Dict[str, Any]:
+            On success: `{"status": "success", "data": {"user_id": ..., "email": ..., ...}}`
+            On failure: `{"status": "error", "error": "Error message"}`
+            If user not found: `{"status": "error", "error": "User data not found."}`
+
+    Error Handling:
+        - Returns an error dict if user_id is invalid.
+        - Returns an error dict if the database query fails or returns an unexpected format.
+        - Logs errors.
+
+    Dependencies:
+        - `execute_supabase_sql` from `shared_libraries.helpers`.
+
+    Example Usage:
+        ```python
+        user_details = await get_user_data("some-uuid-string")
+        if user_details["status"] == "success":
+            print(f"User data: {user_details['data']}")
+        else:
+            print(f"Error: {user_details['error']}")
+        ```
     """
+    if not user_id or not isinstance(user_id, str):
+        logger.error("get_user_data: Invalid user_id provided.")
+        return {"status": "error", "error": "Invalid user_id provided. User ID must be a non-empty string."}
+
+    logger.info(f"get_user_data: Attempting to get data for user_id: {user_id}")
     sql = "SELECT * FROM users WHERE user_id = :user_id LIMIT 1;"
-    result = await execute_supabase_sql(sql, {"user_id": user_id})
-    if isinstance(result, list) and result:
-        return result[0]
-    elif isinstance(result, dict) and result.get("rows"):
-         return result["rows"][0]
-    elif isinstance(result, dict) and "user_id" in result and result.get("user_id") == user_id : # Check if it's the data
-        return result
-    return {"error": f"User data not found or unexpected result format for user_id: {user_id}. Result: {result}"}
 
-async def update_user_data(user_id: str, data: dict) -> dict:
+    try:
+        result = await execute_supabase_sql(sql, {"user_id": user_id})
+
+        if isinstance(result, dict) and "error" in result:
+            logger.error(f"get_user_data: Database error for user_id {user_id}: {result['error']}")
+            return {"status": "error", "error": result['error']}
+
+        user_data_dict = None
+        if isinstance(result, list) and result:
+            user_data_dict = result[0]
+        elif isinstance(result, dict) and result.get("rows") and result["rows"]:
+             user_data_dict = result["rows"][0]
+        elif isinstance(result, dict) and "user_id" in result and result.get("user_id") == user_id:
+            user_data_dict = result
+
+        if user_data_dict:
+            logger.info(f"get_user_data: Successfully retrieved data for user_id {user_id}.")
+            return {"status": "success", "data": user_data_dict}
+        else:
+            logger.warning(f"get_user_data: User data not found for user_id {user_id}. Result: {result}")
+            return {"status": "error", "error": "User data not found."}
+
+    except Exception as e:
+        logger.exception(f"get_user_data: Unexpected error for user_id {user_id}: {e}")
+        return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
+
+
+async def update_user_data(user_id: str, data: Dict[str, Any]) -> Dict[str, Any]: # Removed context
     """
-    Update user data for a given user_id. Only allowed columns are updated;
-    extra fields go into preferences. user_type cannot be updated by this function directly.
+    Updates user data for a given user_id.
+    Specific columns are updated directly; other fields are merged into the 'preferences' JSONB column.
+    The 'user_type' column is intentionally not updatable by this function.
+
     Args:
-        user_id (str): The user's UUID.
-        data (dict): Fields to update (top-level or preferences).
+        user_id (str): The user's UUID. Must be a non-empty string.
+        data (Dict[str, Any]): A dictionary of fields to update.
+                               Keys matching allowed columns update those columns.
+                               Other keys are added/updated within the 'preferences' field.
+        # context (Optional[ToolContext]): The ADK ToolContext. (Removed for schema compatibility)
+
     Returns:
-        dict: Updated user data or {"error": <str>}
+        Dict[str, Any]:
+            On success: `{"status": "success", "data": {updated_user_data_dict}}`
+            On failure: `{"status": "error", "error": "Error message"}`
+
+    Error Handling:
+        - Returns an error dict if user_id or data is invalid.
+        - Returns an error dict if no valid fields for update are provided.
+        - Returns an error dict if database update fails.
+        - Logs errors.
+
+    Dependencies:
+        - `get_user_data` (for merging preferences).
+        - `execute_supabase_sql` from `shared_libraries.helpers`.
+
+    Example Usage:
+        ```python
+        update_payload = {"display_name": "New Name", "custom_pref": "value1"}
+        response = await update_user_data("some-uuid", update_payload)
+        if response["status"] == "success":
+            print("User updated:", response["data"])
+        else:
+            print("Update error:", response["error"])
+        ```
     """
+    if not user_id or not isinstance(user_id, str):
+        logger.error("update_user_data: Invalid user_id provided.")
+        return {"status": "error", "error": "Invalid user_id. Must be a non-empty string."}
+    if not data or not isinstance(data, dict):
+        logger.error(f"update_user_data: Invalid or empty data provided for user_id {user_id}.")
+        return {"status": "error", "error": "Invalid or empty data payload. Must be a non-empty dictionary."}
+
+    logger.info(f"update_user_data: Attempting to update data for user_id: {user_id} with payload: {data}")
+
     USERS_TABLE_COLUMNS = {
         "user_id", "supabase_auth_uid", "email", "display_name", "created_at", "updated_at",
         "wedding_date", "wedding_location", "wedding_tradition", "preferences"
-        # "user_type" is intentionally excluded as per prompt instructions for onboarding agent
     }
 
-    fields_to_update = {}
-    preferences_to_update = data.get("preferences", {}) # Start with existing preferences if provided
-    if not isinstance(preferences_to_update, dict): # Ensure preferences is a dict
-        preferences_to_update = {}
+    fields_to_set = {}
+    preferences_to_merge = data.get("preferences", {})
+    if not isinstance(preferences_to_merge, dict): # Ensure it's a dict if provided
+        logger.warning(f"update_user_data: 'preferences' field in payload for user {user_id} is not a dict, ignoring.")
+        preferences_to_merge = {}
 
     for key, value in data.items():
-        if key == "preferences": # Already handled
+        if key == "preferences":
             continue
         if key in USERS_TABLE_COLUMNS:
-            fields_to_update[key] = value
-        else: # Extra fields go into preferences
-            preferences_to_update[key] = value
+            fields_to_set[key] = value
+        elif key == "user_type":
+             logger.warning(f"update_user_data: Attempt to update 'user_type' for user {user_id} was ignored.")
+        else: # Field not in main columns (excluding user_type) goes to preferences
+            preferences_to_merge[key] = value
 
-    # Fetch current preferences if we are adding new ones, to merge correctly
-    if preferences_to_update:
-        current_user_data = await get_user_data(user_id)
-        if not current_user_data or "error" in current_user_data:
-            # Decide handling: error out, or proceed with empty current_prefs?
-            # For now, let's assume if user_id is valid, we can update.
-            # This part might need refinement based on how strictly we want to enforce prior existence.
-            current_prefs = {}
+    try:
+        if preferences_to_merge:
+            current_user_response = await get_user_data(user_id) # Pass context if available (context removed)
+            if current_user_response["status"] == "success":
+                current_prefs = current_user_response["data"].get("preferences", {})
+                if not isinstance(current_prefs, dict):
+                    current_prefs = {} # Default to empty if malformed or None
+                current_prefs.update(preferences_to_merge)
+                fields_to_set["preferences"] = current_prefs
+            else: # Failed to get current user data, potentially error out or proceed with caution
+                logger.warning(f"update_user_data: Could not fetch current preferences for user {user_id} due to: {current_user_response.get('error')}. Merging with empty preferences.")
+                fields_to_set["preferences"] = preferences_to_merge # Use only new preferences
+
+        if not fields_to_set:
+            logger.warning(f"update_user_data: No valid fields to update for user_id {user_id} after processing payload.")
+            return {"status": "error", "error": "No valid fields provided for update after processing."}
+
+        if "preferences" in fields_to_set and isinstance(fields_to_set["preferences"], dict):
+            fields_to_set["preferences"] = json.dumps(fields_to_set["preferences"])
+
+        set_clause_parts = []
+        update_params = {}
+        # Use specific param names to avoid issues with SQL keywords or special chars in keys
+        for i, (k, v) in enumerate(fields_to_set.items()):
+            param_name = f"val{i}"
+            set_clause_parts.append(f"{k} = :{param_name}") # k should be from USERS_TABLE_COLUMNS, thus safe
+            update_params[param_name] = v
+
+        set_clause = ", ".join(set_clause_parts)
+        sql = f"UPDATE users SET {set_clause} WHERE user_id = :user_id_param RETURNING *;"
+        final_params = {**update_params, "user_id_param": user_id} # Ensure user_id key for param is unique
+
+        result = await execute_supabase_sql(sql, final_params)
+
+        if isinstance(result, dict) and "error" in result:
+            logger.error(f"update_user_data: Database error for user_id {user_id}: {result['error']}")
+            return {"status": "error", "error": result['error']}
+
+        updated_data = None
+        if isinstance(result, list) and result:
+            updated_data = result[0]
+        elif isinstance(result, dict) and result.get("rows") and result["rows"]:
+            updated_data = result["rows"][0]
+        elif isinstance(result, dict) and "user_id" in result:
+            updated_data = result
+
+        if updated_data:
+            logger.info(f"update_user_data: Successfully updated data for user_id {user_id}.")
+            return {"status": "success", "data": updated_data}
         else:
-            current_prefs = current_user_data.get("preferences", {})
-            if not isinstance(current_prefs, dict): # Ensure current_prefs is a dict
-                current_prefs = {}
+            logger.error(f"update_user_data: Update failed for user_id {user_id}. DB Result: {result}")
+            return {"status": "error", "error": "Update failed or did not return updated data."}
 
-        current_prefs.update(preferences_to_update)
-        fields_to_update["preferences"] = current_prefs # Add potentially merged preferences to update set
-
-    if not fields_to_update:
-        return {"error": "No valid fields provided for update."}
-
-    # Always JSON-serialize preferences if it's in the update list
-    if "preferences" in fields_to_update and isinstance(fields_to_update["preferences"], dict):
-        fields_to_update["preferences"] = json.dumps(fields_to_update["preferences"])
-
-    set_clause_parts = []
-    update_params = {}
-    for i, (k, v) in enumerate(fields_to_update.items()):
-        param_name = f"param_{i}"
-        set_clause_parts.append(f"{k} = :{param_name}")
-        update_params[param_name] = v
-
-    set_clause = ", ".join(set_clause_parts)
-
-    sql = f"UPDATE users SET {set_clause} WHERE user_id = :user_id RETURNING *;"
-    final_params = {**update_params, "user_id": user_id}
-
-    # print(f"Final SQL for update_user_data: {sql} with params: {final_params}")
-    result = await execute_supabase_sql(sql, final_params)
-
-    if isinstance(result, list) and result:
-        return result[0]
-    elif isinstance(result, dict) and result.get("rows"):
-        return result["rows"][0]
-    elif isinstance(result, dict) and "user_id" in result: # If it's already the flat dict
-        return result
-    return {"error": f"Update failed or unexpected result format. Result: {result}"}
+    except Exception as e:
+        logger.exception(f"update_user_data: Unexpected error for user_id {user_id}: {e}")
+        return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
 
-async def get_user_activities(user_id: str) -> list:
+async def get_user_activities(user_id: str) -> Dict[str, Any]: # Removed context
     """
-    Get all user activities (chat messages) for a user.
+    Retrieves all user activities (chat messages) for a given user, ordered by timestamp.
+
     Args:
-        user_id (str): The user's UUID.
+        user_id (str): The user's UUID. Must be a non-empty string.
+        # context (Optional[ToolContext]): The ADK ToolContext. (Removed for schema compatibility)
+
     Returns:
-        list: List of activity dicts or an error dict.
+        Dict[str, Any]:
+            On success: `{"status": "success", "data": [activity_dict_1, activity_dict_2, ...]}`
+            On failure: `{"status": "error", "error": "Error message"}`
+            If no activities: `{"status": "success", "data": []}`
+
+    Error Handling:
+        - Returns an error dict if user_id is invalid.
+        - Returns an error dict if the database query fails.
+        - Logs errors.
+
+    Dependencies:
+        - `execute_supabase_sql` from `shared_libraries.helpers`.
+
+    Example Usage:
+        ```python
+        activities_response = await get_user_activities("some-uuid")
+        if activities_response["status"] == "success":
+            for activity in activities_response["data"]:
+                print(activity)
+        else:
+            print(f"Error fetching activities: {activities_response['error']}")
+        ```
     """
+    if not user_id or not isinstance(user_id, str):
+        logger.error("get_user_activities: Invalid user_id provided.")
+        return {"status": "error", "error": "Invalid user_id. Must be a non-empty string."}
+
+    logger.info(f"get_user_activities: Fetching activities for user_id: {user_id}")
     sql = """
         SELECT cm.*
         FROM chat_sessions cs
@@ -131,9 +309,20 @@ async def get_user_activities(user_id: str) -> list:
         WHERE cs.user_id = :user_id
         ORDER BY cm.timestamp DESC;
     """
-    result = await execute_supabase_sql(sql, {"user_id": user_id})
-    if isinstance(result, list): # Assumes execute_supabase_sql returns list for SELECT
-        return result
-    elif isinstance(result, dict) and "error" in result:
-        return result # Propagate error
-    return {"error": f"Could not fetch user activities or unexpected format. Result: {result}"}
+    try:
+        result = await execute_supabase_sql(sql, {"user_id": user_id})
+
+        if isinstance(result, dict) and "error" in result:
+            logger.error(f"get_user_activities: Database error for user_id {user_id}: {result['error']}")
+            return {"status": "error", "error": result['error']}
+
+        if isinstance(result, list):
+            logger.info(f"get_user_activities: Successfully retrieved {len(result)} activities for user_id {user_id}.")
+            return {"status": "success", "data": result}
+        else: # Should ideally not happen if execute_supabase_sql is consistent for SELECTs
+            logger.warning(f"get_user_activities: Unexpected result format for user_id {user_id}. Result: {result}")
+            return {"status": "error", "error": "Could not fetch user activities or unexpected format."}
+
+    except Exception as e:
+        logger.exception(f"get_user_activities: Unexpected error for user_id {user_id}: {e}")
+        return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
