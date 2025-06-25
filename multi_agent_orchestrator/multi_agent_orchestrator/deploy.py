@@ -6,7 +6,7 @@ from google.adk.cli.fast_api import get_fast_api_app
 import json
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Get the directory where deploy.py is located, which is multi_agent_orchestrator/
 # This will be the base for agent discovery if get_fast_api_app uses it.

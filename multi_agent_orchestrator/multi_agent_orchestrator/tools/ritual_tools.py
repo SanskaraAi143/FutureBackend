@@ -2,10 +2,8 @@ import logging
 from typing import List, Dict, Any, Optional
 from google.adk.tools import ToolContext # For type hinting context
 
-# Import astra_db from the new config location
-from multi_agent_orchestrator.config import astra_db
-# We might need to handle the case where astra_db is None if config loading fails,
-# or ensure config is loaded before tools are. For now, direct import.
+# Import astra_db from the config location
+from multi_agent_orchestrator.multi_agent_orchestrator.config import astra_db
 
 # Configure logging for this module
 logger = logging.getLogger(__name__)
@@ -33,7 +31,7 @@ async def search_rituals(question: str, limit: int = 3) -> Dict[str, Any]: # Rem
         - Logs errors and important actions.
 
     Dependencies:
-        - `astra_db` client from `multi_agent_orchestrator.config`.
+        - `astra_db` client from `multi_agent_orchestrator.multi_agent_orchestrator.config`.
         - `astrapy` library for AstraDB interaction.
 
     Example Usage:
@@ -114,7 +112,6 @@ if __name__ == '__main__':
     # For this specific tool, ASTRA_API_TOKEN and ASTRA_API_ENDPOINT are key.
     from dotenv import load_dotenv
     import os
-    import json
 
     # Load .env from project root (two levels up from tools directory)
     dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')

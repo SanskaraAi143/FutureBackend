@@ -187,13 +187,15 @@ async def execute_supabase_sql(sql: str, params: Optional[Dict[str, Any]] = None
 
             # Attempt to parse as JSON directly first
             try:
-                parsed_data = extract_untrusted_json(text_response)
-                if parsed_data is not None:
-                    logger.debug(f"execute_supabase_sql: Extracted JSON data: {parsed_data}")
-                    return parsed_data
-            except Exception as e:
-                logger.error(f"execute_supabase_sql: Error extracting JSON from text response: {e}")
-                # If extraction fails, log the error but continue to handle as a failure
+                parsed_data = json.loads(text_response)
+                return {"status": "success", "data": parsed_data}
+            except json.JSONDecodeError:
+                # If direct JSON load fails, try extracting JSON-like string if it's embedded
+                logger.warning(f"execute_supabase_sql: Direct JSON parsing failed for: {text_response}. Attempting extraction.")
+                extracted_data = extract_untrusted_json(text_response)
+                if extracted_data is not None:
+                    return {"status": "success", "data": extracted_data}
+
                 # If still no valid JSON, and it's not an obvious error structure from MCP itself:
                 logger.error(f"execute_supabase_sql: Failed to parse MCP response as JSON. Response text: {text_response}")
                 return {"status": "error", "error": "Failed to parse database response.", "details": text_response}
@@ -237,14 +239,13 @@ def extract_untrusted_json(text_data: str) -> Optional[Any]:
         # json_data would be [{'key': 'value'}]
         ```
     """
-    logger.debug(f"extract_untrusted_json: Attempting to extract JSON from text: {text_data[:100]}...") # Log first 100 chars for brevity
     if not isinstance(text_data, str):
         logger.warning(f"extract_untrusted_json: Input was not a string, type: {type(text_data)}")
         return None
 
     # Regex to find the first occurrence of a JSON array "[...]" or object "{...}"
     # This is a greedy match for the outermost brackets/braces.
-    match = re.search(r"\[.*\]", text_data, re.DOTALL)
+    match = re.search(r"(\{.*\})|(\[.*\])", text_data, re.DOTALL)
     if match:
         json_str = match.group(0).strip()
         # Basic un-escaping for double quotes if they were escaped in the source string
