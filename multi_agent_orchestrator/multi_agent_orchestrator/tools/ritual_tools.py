@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Optional
 
 # Import astra_db from the new config location
-from multi_agent_orchestrator.config import astra_db
+from multi_agent_orchestrator.multi_agent_orchestrator.config import astra_db
 # We might need to handle the case where astra_db is None if config loading fails,
 # or ensure config is loaded before tools are. For now, direct import.
 

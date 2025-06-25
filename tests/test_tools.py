@@ -2,7 +2,7 @@ import pytest
 import asyncio
 
 # Adjust imports for tools from their new locations
-from multi_agent_orchestrator.tools import (
+from multi_agent_orchestrator.multi_agent_orchestrator.tools import (
     get_user_id,
     get_user_data,
     update_user_data,

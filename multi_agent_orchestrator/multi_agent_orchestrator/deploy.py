@@ -43,11 +43,11 @@ try:
         db_path_full = SESSION_DB_URL.replace("sqlite:///", "")
         # If db_path_full is relative, it's relative to CWD.
         # If absolute, it's used as is.
-        # Let's ensure the path is made absolute from the AGENT_DIR's parent (repo root)
+        # Let's ensure the path is made absolute from the project root (two levels above AGENT_DIR)
         # if it's a relative path starting with './'
         if db_path_full.startswith("./"):
-            repo_root = os.path.dirname(AGENT_DIR) # parent of multi_agent_orchestrator
-            db_path_full = os.path.join(repo_root, db_path_full.lstrip("./"))
+            project_root = os.path.dirname(os.path.dirname(AGENT_DIR)) # Two levels up from deploy.py location
+            db_path_full = os.path.join(project_root, db_path_full.lstrip("./"))
 
         db_dir = os.path.dirname(db_path_full)
         if db_dir and not os.path.exists(db_dir):
@@ -95,7 +95,10 @@ if __name__ == "__main__":
     # The CWD should ideally be the repository root for consistent relative path handling (e.g. for .env, sessions.db)
 
     # To ensure .env is loaded from repo root if this script is run directly:
-    dotenv_path = os.path.join(os.path.dirname(AGENT_DIR), '.env') # AGENT_DIR is multi_agent_orchestrator
+    # AGENT_DIR is multi_agent_orchestrator/multi_agent_orchestrator/
+    # Project root is two levels up from AGENT_DIR.
+    project_root_for_env = os.path.dirname(os.path.dirname(AGENT_DIR))
+    dotenv_path = os.path.join(project_root_for_env, '.env')
     if os.path.exists(dotenv_path):
         from dotenv import load_dotenv
         load_dotenv(dotenv_path=dotenv_path)

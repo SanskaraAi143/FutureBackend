@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Optional
-from multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql, sql_quote_value
+from multi_agent_orchestrator.multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql, sql_quote_value
 
 async def list_vendors(filters: Optional[dict] = None) -> List[Dict[str, Any]]:
     """

@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Optional
-from multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql
+from multi_agent_orchestrator.multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql
 
 async def add_budget_item(user_id: str, item: dict, vendor_name: Optional[str] = None, status: Optional[str] = "Pending") -> Dict[str, Any]:
     """

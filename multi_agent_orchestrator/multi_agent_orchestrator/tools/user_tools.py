@@ -1,6 +1,6 @@
 import json # For logging params if needed
 from typing import List, Dict, Any, Optional
-from multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql, sql_quote_value # Adjusted import
+from multi_agent_orchestrator.multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql, sql_quote_value # Adjusted import
 
 async def get_user_id(email: str) -> dict:
     """
