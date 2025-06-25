@@ -5,7 +5,8 @@ from google.adk.runners import Runner
 from google.genai import types
 
 # Adjust import for budget_agent from its new location
-from ..agent import budget_agent # Corrected relative import
+from ..agent import budget_agent # Reverted to .. for correct relative path
+from ..prompt import BUDGET_PROMPT # Reverted to .. for correct relative path
 # Placeholder for now:
 # from google.adk.agents import LlmAgent
 # BUDGET_PROMPT_PLACEHOLDER = "Test Budget Prompt"

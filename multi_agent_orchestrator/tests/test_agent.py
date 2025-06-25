@@ -5,7 +5,7 @@ from google.adk.runners import Runner
 from google.genai import types
 
 # Adjust import for the main orchestrator agent from its new location
-from multi_agent_orchestrator.multi_agent_orchestrator.agent import OrchestratorAgent # Corrected import
+from multi_agent_orchestrator.agent import OrchestratorAgent # Corrected import after structure change
 # Placeholder for now:
 # from google.adk.agents import LlmAgent
 # ORCHESTRATOR_PROMPT_PLACEHOLDER = "Test Orchestrator Prompt"

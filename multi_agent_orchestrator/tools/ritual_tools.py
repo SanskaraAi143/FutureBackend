@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from google.adk.tools import ToolContext # For type hinting context
 
 # Import astra_db from the config location
-from multi_agent_orchestrator.multi_agent_orchestrator.config import astra_db
+from multi_agent_orchestrator.config import astra_db # Corrected import
 
 # Configure logging for this module
 logger = logging.getLogger(__name__)

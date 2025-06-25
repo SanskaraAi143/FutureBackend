@@ -5,7 +5,8 @@ from google.adk.runners import Runner
 from google.genai import types
 
 # Adjust import for vendor_search_agent from its new location
-from ..agent import vendor_search_agent # Corrected relative import
+from ..agent import vendor_search_agent # Reverted to .. for correct relative path
+from ..prompt import VENDOR_PROMPT # Reverted to .. for correct relative path
 # Placeholder for now:
 # from google.adk.agents import LlmAgent
 # VENDOR_PROMPT_PLACEHOLDER = "Test Vendor Prompt"
@@ -39,7 +40,7 @@ async def test_vendor_search_agent_interaction(): # Renamed
 @pytest.mark.asyncio
 async def test_vendor_search_agent_no_results():
     from google.adk.agents import LlmAgent # Import LlmAgent
-    from ..prompt import VENDOR_PROMPT # Corrected: Import the actual prompt from parent
+    from ..prompt import VENDOR_PROMPT # Corrected indentation and path
 
     session_service = InMemorySessionService()
     session = await session_service.create_session(app_name="test_app_vendor", user_id="test_user_vs_err", session_id="test_session_vendor_no_results")

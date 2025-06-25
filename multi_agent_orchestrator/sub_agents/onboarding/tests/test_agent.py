@@ -5,7 +5,8 @@ from google.adk.runners import Runner
 from google.genai import types # Assuming types is still used for Content
 
 # Adjust import for onboarding_agent from its new location
-from ..agent import onboarding_agent # Corrected relative import
+from ..agent import onboarding_agent # Reverted to .. for correct relative path
+from ..prompt import ONBOARDING_PROMPT # Reverted to .. for correct relative path
 # Placeholder for now:
 # from google.adk.agents import LlmAgent
 # ONBOARDING_PROMPT_PLACEHOLDER = "Test Onboarding Prompt"

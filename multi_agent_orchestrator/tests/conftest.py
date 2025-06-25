@@ -6,8 +6,9 @@ import os
 def load_env_vars():
     """Loads environment variables from .env file before any tests run."""
     print("Attempting to load .env file from conftest.py...")
-    # Assuming .env is in the project root, which is one level above the 'tests' directory
-    dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    # .env is in the project root. __file__ is multi_agent_orchestrator/tests/conftest.py
+    # Project root is two levels up from this conftest.py
+    dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
     loaded = load_dotenv(dotenv_path)
     if loaded:
         print(f".env file loaded successfully from: {dotenv_path}")

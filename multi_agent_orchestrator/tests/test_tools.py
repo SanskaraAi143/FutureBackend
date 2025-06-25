@@ -3,7 +3,7 @@ import asyncio
 from unittest.mock import patch, AsyncMock # For mocking if needed later
 
 # Import all tools to be tested
-from multi_agent_orchestrator.multi_agent_orchestrator.tools import (
+from multi_agent_orchestrator.tools import ( # Corrected import after structure change
     get_user_id,
     get_user_data,
     update_user_data,
@@ -23,6 +23,12 @@ from multi_agent_orchestrator.multi_agent_orchestrator.tools import (
 # Note: ToolContext is not explicitly used by these tests yet, but tools accept it.
 # from google.adk.tools import ToolContext
 
+# Provided Test Data
+TEST_EMAIL = "kpuneeth714@gmail.com"
+TEST_USER_ID = "fca04215-2af3-4a4e-bcfa-c27a4f54474c"
+TEST_VENDOR_ID = "d1788d53-89db-4e8f-b616-a9ab5e2da723"
+# TEST_BUDGET_ITEM_ID_FOR_DELETE = "some-uuid-to-delete" # Would need to be created first
+
 # --- Test User Tools ---
 
 @pytest.mark.asyncio
@@ -30,8 +36,7 @@ async def test_get_user_id_success():
     # This test will likely fail if SUPABASE_ACCESS_TOKEN is not set,
     # as it's an integration test. To make it a unit test, execute_supabase_sql would be mocked.
     # Assuming for now that if execute_supabase_sql runs, it might return a valid-looking structure.
-    email_to_test = "test.user.tools@example.com" # Unique email for this test
-    response = await get_user_id(email=email_to_test)
+    response = await get_user_id(email=TEST_EMAIL) # Using provided TEST_EMAIL
     assert isinstance(response, dict)
     assert "status" in response
     if response["status"] == "success":
@@ -57,13 +62,12 @@ async def test_get_user_id_invalid_input():
 @pytest.mark.asyncio
 async def test_get_user_data_success():
     # Requires a valid user_id that exists, or will return error (which is valid for the tool)
-    test_user_id = "00000000-0000-0000-0000-000000000000" # Placeholder UUID
-    response = await get_user_data(user_id=test_user_id)
+    response = await get_user_data(user_id=TEST_USER_ID) # Using provided TEST_USER_ID
     assert isinstance(response, dict)
     assert "status" in response
     if response["status"] == "success":
         assert "data" in response
-        assert response["data"]["user_id"] == test_user_id # Or check other fields
+        assert response["data"]["user_id"] == TEST_USER_ID
     elif response["status"] == "error":
         assert "error" in response
         print(f"test_get_user_data_success: Received error (expected if user not found/DB issue): {response['error']}")
@@ -81,13 +85,12 @@ async def test_get_user_data_invalid_input():
 async def test_update_user_data_basic():
     # This is a complex test as it involves read-then-write.
     # For a true unit test, get_user_data and execute_supabase_sql would be mocked.
-    test_user_id = "update_user_test_id" # Fictional
-    update_payload = {"display_name": "Updated Name via Test", "new_preference": "test_value"}
+    update_payload = {"display_name": "Updated Name via Pytest", "pytest_preference": "test_value_pytest"}
 
     # To properly test, we'd ideally mock get_user_data to return a known state,
     # then mock execute_supabase_sql to check the generated SQL and return a success.
     # For now, this will likely fail due to SUPABASE_ACCESS_TOKEN missing or user not existing.
-    response = await update_user_data(user_id=test_user_id, data=update_payload)
+    response = await update_user_data(user_id=TEST_USER_ID, data=update_payload) # Using provided TEST_USER_ID
     assert isinstance(response, dict)
     assert "status" in response
     if response["status"] == "success":
@@ -113,8 +116,7 @@ async def test_update_user_data_invalid_input():
 
 @pytest.mark.asyncio
 async def test_get_user_activities_basic():
-    test_user_id = "activities_user_test_id" # Fictional
-    response = await get_user_activities(user_id=test_user_id)
+    response = await get_user_activities(user_id=TEST_USER_ID) # Using provided TEST_USER_ID
     assert isinstance(response, dict)
     assert "status" in response
     if response["status"] == "success":
@@ -138,10 +140,10 @@ async def test_get_user_activities_invalid_input():
 async def test_add_budget_item_success():
     # Args for add_budget_item: user_id, item_name, category, amount
     response = await add_budget_item(
-        user_id="budget_test_user_add",
-        item_name="Test Item",
-        category="Test Category",
-        amount=100.0
+        user_id=TEST_USER_ID, # Using provided TEST_USER_ID
+        item_name="Pytest Budget Item",
+        category="Pytest Category",
+        amount=123.45
     )
     assert response["status"] == "success" or (response["status"] == "error" and "SUPABASE_ACCESS_TOKEN" in response.get("error", "")) # Allow error if token missing
     if response["status"] == "success":
@@ -165,7 +167,7 @@ async def test_add_budget_item_invalid_input():
 
 @pytest.mark.asyncio
 async def test_get_budget_items_basic():
-    response = await get_budget_items(user_id="budget_test_user_get")
+    response = await get_budget_items(user_id=TEST_USER_ID) # Using provided TEST_USER_ID
     assert response["status"] == "success" or (response["status"] == "error" and "SUPABASE_ACCESS_TOKEN" in response.get("error", ""))
     if response["status"] == "success":
         assert isinstance(response["data"], list)
@@ -180,7 +182,21 @@ async def test_list_vendors_basic():
     if response["status"] == "success":
         assert isinstance(response["data"], list)
 
-# ... (More tests for get_vendor_details, search_vendors) ...
+    # Test get_vendor_details
+    details_response = await get_vendor_details(vendor_id=TEST_VENDOR_ID)
+    assert isinstance(details_response, dict)
+    assert "status" in details_response
+    if details_response["status"] == "success":
+        assert "data" in details_response
+        assert details_response["data"]["vendor_id"] == TEST_VENDOR_ID
+    elif details_response["status"] == "error":
+        assert "error" in details_response
+        # This is acceptable if the vendor doesn't exist or DB is down
+        print(f"test_list_vendors_basic (get_vendor_details part): Received error: {details_response['error']}")
+    else:
+        pytest.fail(f"Unexpected status in get_vendor_details response: {details_response.get('status')}")
+
+    # ... (More tests for search_vendors) ...
 
 # --- Test Ritual Tools ---
 @pytest.mark.asyncio
@@ -212,9 +228,9 @@ async def test_search_rituals_invalid_input():
 @pytest.mark.asyncio
 async def test_create_timeline_event_success():
     response = await create_timeline_event(
-        user_id="timeline_user_test",
-        event_name="Test Event",
-        event_date_time="2024-01-01T12:00:00"
+        user_id=TEST_USER_ID, # Using provided TEST_USER_ID
+        event_name="Pytest Timeline Event",
+        event_date_time="2025-01-01T10:00:00"
     )
     assert response["status"] == "success" or (response["status"] == "error" and "SUPABASE_ACCESS_TOKEN" in response.get("error", ""))
     if response["status"] == "success":

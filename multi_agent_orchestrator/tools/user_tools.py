@@ -1,9 +1,9 @@
 import json
 import logging
 from typing import List, Dict, Any, Optional
-from google.adk.tools import ToolContext # For type hinting context, though not strictly used yet
+from google.adk.tools import ToolContext # For type hinting context
 
-from multi_agent_orchestrator.multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql
+from multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql # Corrected import
 
 # Configure logging for this module
 logger = logging.getLogger(__name__)

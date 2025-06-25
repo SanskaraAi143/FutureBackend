@@ -46,7 +46,8 @@ try:
         # Let's ensure the path is made absolute from the project root (two levels above AGENT_DIR)
         # if it's a relative path starting with './'
         if db_path_full.startswith("./"):
-            project_root = os.path.dirname(os.path.dirname(AGENT_DIR)) # Two levels up from deploy.py location
+            # AGENT_DIR is multi_agent_orchestrator/, so its parent is the project root.
+            project_root = os.path.dirname(AGENT_DIR)
             db_path_full = os.path.join(project_root, db_path_full.lstrip("./"))
 
         db_dir = os.path.dirname(db_path_full)
@@ -95,9 +96,9 @@ if __name__ == "__main__":
     # The CWD should ideally be the repository root for consistent relative path handling (e.g. for .env, sessions.db)
 
     # To ensure .env is loaded from repo root if this script is run directly:
-    # AGENT_DIR is multi_agent_orchestrator/multi_agent_orchestrator/
-    # Project root is two levels up from AGENT_DIR.
-    project_root_for_env = os.path.dirname(os.path.dirname(AGENT_DIR))
+    # AGENT_DIR is multi_agent_orchestrator/ (the new project package root)
+    # Project root is one level up from AGENT_DIR.
+    project_root_for_env = os.path.dirname(AGENT_DIR)
     dotenv_path = os.path.join(project_root_for_env, '.env')
     if os.path.exists(dotenv_path):
         from dotenv import load_dotenv
