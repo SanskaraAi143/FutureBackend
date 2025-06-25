@@ -1,4 +1,4 @@
-from multi_agent_orchestrator.multi_agent_orchestrator.config import supabase, astra_db # Use new config path
+from multi_agent_orchestrator.config import supabase, astra_db # Use new config path
 from astrapy import DataAPIClient # Keep for direct client use if needed, or remove if astra_db from config is sufficient
 import os
 from dotenv import load_dotenv

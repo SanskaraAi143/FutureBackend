@@ -1,7 +1,7 @@
 from google.adk.agents import LlmAgent
 from .prompt import RITUAL_PROMPT
 
-from multi_agent_orchestrator.multi_agent_orchestrator.tools import search_rituals
+from multi_agent_orchestrator.tools import search_rituals
 # No longer need placeholder:
 # def search_rituals(*args, **kwargs): pass # Placeholder
 

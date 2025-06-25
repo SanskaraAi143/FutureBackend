@@ -38,7 +38,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Note: The sub_agents list will be populated after the sub_agents themselves are defined and imported.
 # For now, it will be an empty list or commented out.
-OrchestratorAgent = LlmAgent(
+root_agent = LlmAgent(
     name="OrchestratorAgent", # Renamed from RootAgent
     model="gemini-2.0-flash",
     description="Orchestrates the entire user workflow for Sanskara AI, including onboarding, ritual search, budget management, and vendor search. The user only interacts with this agent.",

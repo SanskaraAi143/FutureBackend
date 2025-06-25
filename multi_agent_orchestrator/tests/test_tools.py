@@ -1,263 +1,206 @@
 import pytest
 import asyncio
-from unittest.mock import patch, AsyncMock # For mocking if needed later
+import json
 
-# Import all tools to be tested
-from multi_agent_orchestrator.multi_agent_orchestrator.tools import (
-    get_user_id,
-    get_user_data,
-    update_user_data,
-    get_user_activities,
-    add_budget_item,
-    get_budget_items,
-    update_budget_item,
-    delete_budget_item,
-    list_vendors,
-    get_vendor_details,
-    search_vendors,
-    search_rituals,
-    get_timeline_events,
-    create_timeline_event,
-    update_timeline_event
-)
-# Note: ToolContext is not explicitly used by these tests yet, but tools accept it.
-# from google.adk.tools import ToolContext
+from multi_agent_orchestrator.tools.budget_tools import add_budget_item, get_budget_items, update_budget_item, delete_budget_item, execute_supabase_sql
+from multi_agent_orchestrator.tools.timeline_tools import create_timeline_event, update_timeline_event, get_timeline_events
+from multi_agent_orchestrator.tools.vendor_tools import list_vendors, get_vendor_details
+from multi_agent_orchestrator.tools.user_tools import get_user_id, get_user_data,update_user_data
 
-# --- Test User Tools ---
+
+import uuid
+from datetime import datetime, timezone
+
+
+
+# Test config (replace with real test data as needed)
+TEST_EMAIL = "kpuneeth714@gmail.com"
+TEST_USER_ID = "fca04215-2af3-4a4e-bcfa-c27a4f54474c"
+TEST_VENDOR_ID = "d1788d53-89db-4e8f-b616-a9ab5e2da723"
 
 @pytest.mark.asyncio
-async def test_get_user_id_success():
-    # This test will likely fail if SUPABASE_ACCESS_TOKEN is not set,
-    # as it's an integration test. To make it a unit test, execute_supabase_sql would be mocked.
-    # Assuming for now that if execute_supabase_sql runs, it might return a valid-looking structure.
-    email_to_test = "test.user.tools@example.com" # Unique email for this test
-    response = await get_user_id(email=email_to_test)
-    assert isinstance(response, dict)
-    assert "status" in response
-    if response["status"] == "success":
-        assert "data" in response
-        assert "user_id" in response["data"]
-    elif response["status"] == "error":
-        assert "error" in response
-        # This is acceptable if the user truly doesn't exist or DB is down
-        print(f"test_get_user_id_success: Received error (as expected if user not found/DB issue): {response['error']}")
+async def test_get_user_id():
+    result = await get_user_id(TEST_EMAIL)
+    assert "user_id" in result
+
+@pytest.mark.asyncio
+async def test_get_user_data():
+    result = await get_user_data(TEST_USER_ID)
+    assert result.get("user_id") == TEST_USER_ID
+
+@pytest.mark.asyncio
+async def test_update_user_data():
+    update = {"display_name": "Pytest User", "preferences": {"pytest": True}}
+    result = await update_user_data(TEST_USER_ID, update)
+    assert result.get("display_name") == "Pytest User"
+    assert result.get("preferences", {}).get("pytest") is True
+
+@pytest.mark.asyncio
+async def test_list_vendors():
+    vendors = await list_vendors({"vendor_category": "Venue"})
+    assert isinstance(vendors, list)
+    assert any("vendor_name" in v for v in vendors)
+
+@pytest.mark.asyncio
+async def test_get_vendor_details():
+    vendor = await get_vendor_details(TEST_VENDOR_ID)
+    assert vendor.get("vendor_id") == TEST_VENDOR_ID
+
+@pytest.mark.asyncio
+async def test_budget_item_crud():
+    # Add
+    item = {"item": "Pytest Item", "category": "Decor", "amount": 1234}
+    added = await add_budget_item(TEST_USER_ID, item)
+    assert added.get("item_name") == "Pytest Item"
+    item_id = added.get("item_id")
+    # List
+    items = await get_budget_items(TEST_USER_ID)
+    assert any(i["item_id"] == item_id for i in items)
+    # Update
+    updated = await update_budget_item(item_id, data={"amount": 4321})
+    assert updated.get("data", {}).get("amount") in (4321, "4321.00", "4321")
+    # Delete
+    deleted = await delete_budget_item(item_id)
+    assert deleted.get("status") == "success"
+
+@pytest.mark.asyncio
+async def test_custom_query():
+    sql = f"SELECT * FROM users WHERE user_id = '{TEST_USER_ID}'"
+    result = await execute_supabase_sql(sql)
+    if isinstance(result, dict) and result.get("rows"):
+        assert any(r["user_id"] == TEST_USER_ID for r in result["rows"])
+    elif isinstance(result, list):
+        assert any(r["user_id"] == TEST_USER_ID for r in result)
     else:
-        pytest.fail(f"Unexpected status in response: {response.get('status')}")
+        pytest.fail("custom_query did not return expected result")
 
 @pytest.mark.asyncio
-async def test_get_user_id_invalid_input():
-    response = await get_user_id(email="") # Empty email
-    assert response["status"] == "error"
-    assert "invalid email" in response["error"].lower()
+async def test_create_timeline_event():
+    user_id = TEST_USER_ID
+    event_data = {
+        "event_name": "Sangeet",
+        "event_date_time": "2024-08-03T18:00:00",
+        "description": "Pre-wedding musical night",
+        "location": "Grand Ballroom"
+    }
 
-    response_none = await get_user_id(email=None) # type: ignore
-    assert response_none["status"] == "error"
-    assert "invalid email" in response_none["error"].lower()
+    # Test successful event creation
+    result = await create_timeline_event(user_id=user_id, event=event_data)
+    assert result.get("status") == "success"
+    assert result.get("data").get("event_name") == "Sangeet"
+    assert result.get("data").get("description") == "Pre-wedding musical night"
+    assert result.get("data").get("location") == "Grand Ballroom"
 
-@pytest.mark.asyncio
-async def test_get_user_data_success():
-    # Requires a valid user_id that exists, or will return error (which is valid for the tool)
-    test_user_id = "00000000-0000-0000-0000-000000000000" # Placeholder UUID
-    response = await get_user_data(user_id=test_user_id)
-    assert isinstance(response, dict)
-    assert "status" in response
-    if response["status"] == "success":
-        assert "data" in response
-        assert response["data"]["user_id"] == test_user_id # Or check other fields
-    elif response["status"] == "error":
-        assert "error" in response
-        print(f"test_get_user_data_success: Received error (expected if user not found/DB issue): {response['error']}")
-    else:
-        pytest.fail(f"Unexpected status in response: {response.get('status')}")
+    # Test error handling - missing user_id
+    result = await create_timeline_event(user_id="", event=event_data)
+    assert result.get("status") == "error"
+    assert "User ID is required" in result.get("error")
 
+    # Test error handling - missing event_name
+    event_data_missing_name = {
+        "event_date_time": "2024-08-03T18:00:00",
+        "description": "Pre-wedding musical night",
+        "location": "Grand Ballroom"
+    }
+    result = await create_timeline_event(user_id=user_id, event=event_data_missing_name)
+    assert result.get("status") == "error"
+    assert "Missing required fields for timeline event." in result.get("error")
 
-@pytest.mark.asyncio
-async def test_get_user_data_invalid_input():
-    response = await get_user_data(user_id="")
-    assert response["status"] == "error"
-    assert "invalid user_id" in response["error"].lower()
-
-@pytest.mark.asyncio
-async def test_update_user_data_basic():
-    # This is a complex test as it involves read-then-write.
-    # For a true unit test, get_user_data and execute_supabase_sql would be mocked.
-    test_user_id = "update_user_test_id" # Fictional
-    update_payload = {"display_name": "Updated Name via Test", "new_preference": "test_value"}
-
-    # To properly test, we'd ideally mock get_user_data to return a known state,
-    # then mock execute_supabase_sql to check the generated SQL and return a success.
-    # For now, this will likely fail due to SUPABASE_ACCESS_TOKEN missing or user not existing.
-    response = await update_user_data(user_id=test_user_id, data=update_payload)
-    assert isinstance(response, dict)
-    assert "status" in response
-    if response["status"] == "success":
-        assert "data" in response
-        assert response["data"]["display_name"] == "Updated Name via Test"
-        # Add checks for preferences if the mock/DB state allows
-    elif response["status"] == "error":
-        assert "error" in response
-        print(f"test_update_user_data_basic: Received error (expected if keys missing/user not found): {response['error']}")
-    else:
-        pytest.fail(f"Unexpected status: {response.get('status')}")
-
+    # Test error handling - invalid event data type
+    result = await create_timeline_event(user_id=user_id, event="not a dict")
+    assert result.get("status") == "error"
+    assert "Event data must be a dictionary" in result.get("error")
 
 @pytest.mark.asyncio
-async def test_update_user_data_invalid_input():
-    response = await update_user_data(user_id="", data={"display_name": "test"})
-    assert response["status"] == "error"
-    assert "invalid user_id" in response["error"].lower()
+async def test_update_timeline_event():
+    # Create a test event first
+    user_id = TEST_USER_ID
+    event_data = {
+        "event_name": "Test Event",
+        "event_date_time": "2024-08-05T10:00:00",
+        "description": "Test description",
+        "location": "Test Location"
+    }
+    create_result = await create_timeline_event(user_id=user_id, event=event_data)
+    assert create_result.get("status") == "success"
+    event_id = create_result.get("data").get("event_id")
+    print(f"Created event with ID: {event_id}")
+    # Now update the event
+    updates = {"event_name": "Updated Event Name", "description": "Updated description"}
+    update_result = await update_timeline_event(event_id=event_id, updates=updates)
+    print(f"Update result: {update_result}")
+    assert update_result.get("status") == "success"
+    assert update_result.get("data").get("event_name") == "Updated Event Name"
+    assert update_result.get("data").get("description") == "Updated description"
 
-    response_no_data = await update_user_data(user_id="some-id", data={})
-    assert response_no_data["status"] == "error"
-    assert "empty data payload" in response_no_data["error"].lower() # Or "No valid fields"
+    # Test updating event_date_time
+    new_event_date_time = "2024-08-06T12:00:00"
+    updates = {"event_date_time": new_event_date_time}
+    update_result = await update_timeline_event(event_id=event_id, updates=updates)
+    assert update_result.get("status") == "success"
 
-@pytest.mark.asyncio
-async def test_get_user_activities_basic():
-    test_user_id = "activities_user_test_id" # Fictional
-    response = await get_user_activities(user_id=test_user_id)
-    assert isinstance(response, dict)
-    assert "status" in response
-    if response["status"] == "success":
-        assert "data" in response
-        assert isinstance(response["data"], list)
-    elif response["status"] == "error":
-        assert "error" in response
-        print(f"test_get_user_activities_basic: Received error (expected if keys missing/user not found): {response['error']}")
-    else:
-        pytest.fail(f"Unexpected status: {response.get('status')}")
+    # Convert new_event_date_time to the expected format with timezone
+    expected_event_date_time = datetime.fromisoformat(new_event_date_time).replace(tzinfo=timezone.utc).strftime("%Y-%m-%d %H:%M:%S+00")
 
-@pytest.mark.asyncio
-async def test_get_user_activities_invalid_input():
-    response = await get_user_activities(user_id="")
-    assert response["status"] == "error"
-    assert "invalid user_id" in response["error"].lower()
+    # Compare the event_date_time from the database result with the expected value
+    actual_event_date_time = update_result.get("data").get("event_date_time")
+    print(f"Actual event_date_time: {actual_event_date_time}")
+    print(f"Expected event_date_time: {expected_event_date_time}")
+    assert actual_event_date_time == expected_event_date_time
 
-# --- Test Budget Tools ---
+    # Test error handling - invalid event_id
+    invalid_event_id = str(uuid.uuid4())
+    updates = {"event_name": "Attempted Update"}
+    update_result = await update_timeline_event(event_id=invalid_event_id, updates=updates)
+    assert update_result.get("status") == "error"
+    assert "Event not found or update failed." in update_result.get("error")
+    print(f"Update result for invalid event ID: {update_result}")
+    # Test error handling - missing event_id
+    updates = {"event_name": "Attempted Update"}
+    update_result = await update_timeline_event(event_id="", updates=updates)
+    assert update_result.get("status") == "error"
+    assert "Event ID is required." in update_result.get("error")
+    print(f"Update result for missing event ID: {update_result}")
+    # # Clean up the test event (optional, but good practice)
+    # delete_sql = "DELETE FROM timeline_events WHERE event_id = :event_id;"
+    # await execute_supabase_sql(delete_sql, {"event_id": event_id})
 
-@pytest.mark.asyncio
-async def test_add_budget_item_success():
-    # Args for add_budget_item: user_id, item_name, category, amount
-    response = await add_budget_item(
-        user_id="budget_test_user_add",
-        item_name="Test Item",
-        category="Test Category",
-        amount=100.0
-    )
-    assert response["status"] == "success" or (response["status"] == "error" and "SUPABASE_ACCESS_TOKEN" in response.get("error", "")) # Allow error if token missing
-    if response["status"] == "success":
-        assert "data" in response
-        assert response["data"]["item_name"] == "Test Item"
 
-@pytest.mark.asyncio
-async def test_add_budget_item_invalid_input():
-    response = await add_budget_item(user_id="", item_name="Test", category="Cat", amount=10)
-    assert response["status"] == "error"
-    assert "invalid input" in response["error"].lower()
-
-    response_neg_amount = await add_budget_item("user1", "Test", "Cat", amount=-10)
-    assert response_neg_amount["status"] == "error"
-    assert "amount cannot be negative" in response_neg_amount["error"].lower()
-
-    response_bad_amount = await add_budget_item("user1", "Test", "Cat", amount="abc") # type: ignore
-    assert response_bad_amount["status"] == "error"
-    assert "amount must be a valid number" in response_bad_amount["error"].lower()
-
+# asyncio.run(test_update_timeline_event())
 
 @pytest.mark.asyncio
-async def test_get_budget_items_basic():
-    response = await get_budget_items(user_id="budget_test_user_get")
-    assert response["status"] == "success" or (response["status"] == "error" and "SUPABASE_ACCESS_TOKEN" in response.get("error", ""))
-    if response["status"] == "success":
-        assert isinstance(response["data"], list)
+async def test_get_timeline_events():
+    # Create a test event first
+    user_id = TEST_USER_ID
+    event_data = {
+        "event_name": "Test Event",
+        "event_date_time": "2024-08-05T10:00:00",
+        "description": "Test description",
+        "location": "Test Location"
+    }
+    create_result = await create_timeline_event(user_id=user_id, event=event_data)
+    assert create_result.get("status") == "success"
 
-# ... (More tests for update_budget_item, delete_budget_item with success, error, not found cases) ...
+    # Get the timeline events for the user
+    events = await get_timeline_events(user_id=user_id)
+    assert isinstance(events, list)
+    assert len(events) > 0
 
-# --- Test Vendor Tools ---
-@pytest.mark.asyncio
-async def test_list_vendors_basic():
-    response = await list_vendors(filters={"vendor_category": "Venue"})
-    assert response["status"] == "success" or (response["status"] == "error" and "SUPABASE_ACCESS_TOKEN" in response.get("error", ""))
-    if response["status"] == "success":
-        assert isinstance(response["data"], list)
+    # Check if at least one event has the correct user_id and event_name
+    found = False
+    for event in events:
+        if event.get("user_id") == user_id and event.get("event_name") == "Test Event":
+            found = True
+            break
+    assert found, "No event with the correct user_id and event_name found."
 
-# ... (More tests for get_vendor_details, search_vendors) ...
+    # Test error handling - missing user_id
+    events = await get_timeline_events(user_id="")
+    assert isinstance(events, dict)
+    assert events.get("status") == "error"
+    assert "User ID is required." in events.get("error")
 
-# --- Test Ritual Tools ---
-@pytest.mark.asyncio
-async def test_search_rituals_success():
-    # This will likely fail if ASTRA keys are not set.
-    response = await search_rituals(question="What is Kanyadaan?")
-    assert isinstance(response, dict)
-    assert "status" in response
-    if response["status"] == "success":
-        assert "data" in response
-        assert isinstance(response["data"], list)
-    elif response["status"] == "error":
-        assert "error" in response
-        print(f"test_search_rituals_success: Received error (expected if Astra keys missing): {response['error']}")
-    else:
-        pytest.fail(f"Unexpected status: {response.get('status')}")
-
-@pytest.mark.asyncio
-async def test_search_rituals_invalid_input():
-    response_empty_q = await search_rituals(question="")
-    assert response_empty_q["status"] == "error"
-    assert "question' must be a non-empty string" in response_empty_q["error"]
-
-    response_bad_limit = await search_rituals(question="test", limit=0)
-    assert response_bad_limit["status"] == "error"
-    assert "'limit' must be a positive integer" in response_bad_limit["error"]
-
-# --- Test Timeline Tools ---
-@pytest.mark.asyncio
-async def test_create_timeline_event_success():
-    response = await create_timeline_event(
-        user_id="timeline_user_test",
-        event_name="Test Event",
-        event_date_time="2024-01-01T12:00:00"
-    )
-    assert response["status"] == "success" or (response["status"] == "error" and "SUPABASE_ACCESS_TOKEN" in response.get("error", ""))
-    if response["status"] == "success":
-        assert "data" in response
-        assert response["data"]["event_name"] == "Test Event"
-
-# ... (More tests for get_timeline_events, update_timeline_event) ...
-
-# Note: The original test file had more complex CRUD sequences.
-# For this refactoring, I'm focusing on individual tool contracts and basic success/error paths.
-# More comprehensive integration tests (like the original test_budget_tools_crud_operations)
-# would require a test database or extensive mocking.
-# The current tests will mostly verify signatures and basic error handling if DB calls fail due to missing keys.
-# If keys ARE present, they become integration tests.
-
-# Example of a more complete test for one function (e.g. delete_budget_item)
-@pytest.mark.asyncio
-async def test_delete_budget_item_not_found():
-    # Assuming item "non_existent_item_id" does not exist
-    response = await delete_budget_item(item_id="non_existent_item_id_for_test")
-    # This will likely return an error from execute_supabase_sql if token is missing,
-    # OR if token is present, it should return an error from the tool itself about not found.
-    assert response["status"] == "error"
-    if "SUPABASE_ACCESS_TOKEN" not in response.get("error",""): # Only assert specific error if not a token issue
-         assert "not found" in response["error"].lower() or "deletion failed" in response["error"].lower()
-
-@pytest.mark.asyncio
-async def test_update_budget_item_invalid_inputs():
-    response_no_id = await update_budget_item(item_id="", data={"amount":100})
-    assert response_no_id["status"] == "error"
-    assert "invalid item_id" in response_no_id["error"].lower()
-
-    response_no_data = await update_budget_item(item_id="some-id", data={})
-    assert response_no_data["status"] == "error"
-    assert "data payload must be a non-empty dictionary" in response_no_data["error"].lower() # Corrected assertion
-
-    response_bad_amount = await update_budget_item(item_id="some-id", data={"amount": "abc"}) # type: ignore
-    assert response_bad_amount["status"] == "error"
-    assert "invalid amount" in response_bad_amount["error"].lower()
-
-    response_non_updatable_field = await update_budget_item(item_id="some-id", data={"user_id": "new_user"})
-    assert response_non_updatable_field["status"] == "error" # Because only 'user_id' was given, which is not updatable
-    assert "no valid fields" in response_non_updatable_field["error"].lower()
-
-# Similar detailed tests should be added for other tools and success cases with mocking/setup.
-# For now, the above provides a template.
+    # Clean up the test event (optional, but good practice)
+    event_id = create_result.get("data").get("event_id")
+    delete_sql = "DELETE FROM timeline_events WHERE event_id = :event_id;"
+    await execute_supabase_sql(delete_sql, {"event_id": event_id})

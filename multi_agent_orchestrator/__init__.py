@@ -8,4 +8,4 @@
 
 # For now, keeping it minimal. Python will still be able to import modules
 # from the nested package using the full path, e.g.:
-# from multi_agent_orchestrator.multi_agent_orchestrator.agent import OrchestratorAgent
+# from multi_agent_orchestrator.agent import OrchestratorAgent

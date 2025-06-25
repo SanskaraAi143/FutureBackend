@@ -1,7 +1,7 @@
 from google.adk.agents import LlmAgent
 from .prompt import VENDOR_PROMPT
 
-from multi_agent_orchestrator.multi_agent_orchestrator.tools import list_vendors, get_vendor_details
+from multi_agent_orchestrator.tools import list_vendors, get_vendor_details
 # No longer need placeholders
 # def list_vendors(*args, **kwargs): pass # Placeholder
 # def get_vendor_details(*args, **kwargs): pass # Placeholder

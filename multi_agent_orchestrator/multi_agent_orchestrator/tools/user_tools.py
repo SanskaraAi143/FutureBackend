@@ -1,9 +1,9 @@
 import json
 import logging
 from typing import List, Dict, Any, Optional
-from google.adk.tools import ToolContext # For type hinting context, though not strictly used yet
+from multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql, sql_quote_value # Adjusted import
 
-from multi_agent_orchestrator.multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql
+from multi_agent_orchestrator.shared_libraries.helpers import execute_supabase_sql
 
 # Configure logging for this module
 logger = logging.getLogger(__name__)
@@ -14,11 +14,10 @@ async def get_user_id(email: str) -> Dict[str, Any]: # Removed context
 
     Args:
         email (str): The user's email address. Must be a non-empty string.
-        # context (Optional[ToolContext]): The ADK ToolContext, if available. (Removed for schema compatibility)
 
     Returns:
         Dict[str, Any]:
-            On success: `{"status": "success", "data": {"user_id": "uuid-string"}}`
+            On success: `{"status": "success", "data": [{"user_id": "uuid-string"}]}`
             On failure: `{"status": "error", "error": "Error message"}`
             If user not found: `{"status": "error", "error": "User not found."}` (or similar)
 
@@ -34,7 +33,7 @@ async def get_user_id(email: str) -> Dict[str, Any]: # Removed context
         ```python
         user_info = await get_user_id("test@example.com")
         if user_info["status"] == "success":
-            user_id = user_info["data"]["user_id"]
+            user_id = user_info["data"][0]["user_id"]
             print(f"User ID: {user_id}")
         else:
             print(f"Error: {user_info['error']}")
@@ -59,12 +58,13 @@ async def get_user_id(email: str) -> Dict[str, Any]: # Removed context
             user_data = result[0]
         elif isinstance(result, dict) and result.get("rows") and result["rows"]: # Should be covered by list case with MCP
             user_data = result["rows"][0]
-        elif isinstance(result, dict) and "user_id" in result: # Direct dict if MCP returns single object
-             user_data = result
+        elif isinstance(result, dict) and "user_id" in result["data"]: # Direct dict if MCP returns single object
+            user_data = result
 
         if user_data and "user_id" in user_data:
             logger.info(f"get_user_id: Successfully found user_id for email {email}.")
-            return {"status": "success", "data": {"user_id": user_data["user_id"]}}
+            # Always return a list of dicts under 'data' for consistency
+            return {"status": "success", "data": [{"user_id": user_data["user_id"]}]}
         else:
             logger.warning(f"get_user_id: User not found for email {email}. Result: {result}")
             return {"status": "error", "error": "User not found."}
