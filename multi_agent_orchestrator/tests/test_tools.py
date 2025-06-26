@@ -148,7 +148,7 @@ async def test_add_budget_item_success():
     assert response["status"] == "success" or (response["status"] == "error" and "SUPABASE_ACCESS_TOKEN" in response.get("error", "")) # Allow error if token missing
     if response["status"] == "success":
         assert "data" in response
-        assert response["data"]["item_name"] == "Test Item"
+        assert response["data"]["item_name"] == "Pytest Budget Item"
 
 @pytest.mark.asyncio
 async def test_add_budget_item_invalid_input():
@@ -180,7 +180,7 @@ async def test_list_vendors_basic():
     response = await list_vendors(filters={"vendor_category": "Venue"})
     assert response["status"] == "success" or (response["status"] == "error" and "SUPABASE_ACCESS_TOKEN" in response.get("error", ""))
     if response["status"] == "success":
-        assert isinstance(response["data"], list)
+        assert isinstance(response["data"], list) , f"Expected list of vendors, got {type(response['data'])} response: {response}"
 
     # Test get_vendor_details
     details_response = await get_vendor_details(vendor_id=TEST_VENDOR_ID)
@@ -235,7 +235,7 @@ async def test_create_timeline_event_success():
     assert response["status"] == "success" or (response["status"] == "error" and "SUPABASE_ACCESS_TOKEN" in response.get("error", ""))
     if response["status"] == "success":
         assert "data" in response
-        assert response["data"]["event_name"] == "Test Event"
+        assert response["data"]["event_name"] == "Pytest Timeline Event"
 
 # ... (More tests for get_timeline_events, update_timeline_event) ...
 

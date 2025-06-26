@@ -49,7 +49,7 @@ async def get_user_id(email: str) -> Dict[str, Any]: # Removed context
 
     try:
         result = await execute_supabase_sql(sql, {"email": email})
-
+        logger.info(f"get_user_id: SQL executed for email {email}. Result: {result}")
         if isinstance(result, dict) and "error" in result: # Error from execute_supabase_sql
             logger.error(f"get_user_id: Database error for email {email}: {result['error']}")
             return {"status": "error", "error": result['error']}

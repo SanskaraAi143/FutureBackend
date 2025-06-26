@@ -5,11 +5,11 @@ from google.adk.runners import Runner
 from google.genai import types
 
 # Adjust import for the main orchestrator agent from its new location
-from multi_agent_orchestrator.agent import OrchestratorAgent # Corrected for flattened structure
+from multi_agent_orchestrator.agent import root_agent # Corrected for flattened structure
 # Placeholder for now:
 # from google.adk.agents import LlmAgent
 # ORCHESTRATOR_PROMPT_PLACEHOLDER = "Test Orchestrator Prompt"
-# # Define placeholder sub-agents that the OrchestratorAgent expects
+# # Define placeholder sub-agents that the root_agent expects
 # placeholder_onboarding = LlmAgent(name="PlaceholderOnboarding", instruction="...")
 # placeholder_ritual = LlmAgent(name="PlaceholderRitual", instruction="...")
 # placeholder_budget = LlmAgent(name="PlaceholderBudget", instruction="...")
@@ -18,8 +18,8 @@ from multi_agent_orchestrator.agent import OrchestratorAgent # Corrected for fla
 # # Define a placeholder for any tools the orchestrator might directly use (e.g., timeline tools)
 # def create_timeline_event_placeholder(*args, **kwargs): return {"status": "success", "data": {"id": "timeline1"}}
 
-# OrchestratorAgent = LlmAgent( # This line will use the imported OrchestratorAgent
-#     name="PlaceholderOrchestratorAgent",
+# root_agent = LlmAgent( # This line will use the imported root_agent
+#     name="Placeholderroot_agent",
 #     instruction=ORCHESTRATOR_PROMPT_PLACEHOLDER,
 #     sub_agents=[
 #         placeholder_onboarding,
@@ -31,7 +31,7 @@ from multi_agent_orchestrator.agent import OrchestratorAgent # Corrected for fla
 #     # For now, assuming the 'test_create_timeline_event_agent' implies the orchestrator (root_agent)
 #     # was responsible for this, possibly by having such tools itself or by delegating to a sub-agent
 #     # not explicitly broken out in the original sanskara.agent.py (like a general purpose sub-agent).
-#     # For this step, let's assume the OrchestratorAgent might have timeline tools directly for now.
+#     # For this step, let's assume the root_agent might have timeline tools directly for now.
 #     tools=[create_timeline_event_placeholder]
 # )
 
@@ -40,7 +40,7 @@ from multi_agent_orchestrator.agent import OrchestratorAgent # Corrected for fla
 async def test_orchestrator_timeline_interaction(): # Renamed from test_create_timeline_event_agent
     session_service = InMemorySessionService()
     session = await session_service.create_session(app_name="test_app_orchestrator", user_id="test_user_orch", session_id="test_session_timeline_orch")
-    runner = Runner(agent=OrchestratorAgent, app_name="test_app_orchestrator", session_service=session_service)
+    runner = Runner(agent=root_agent, app_name="test_app_orchestrator", session_service=session_service)
 
     content = types.Content(role='user', parts=[types.Part(text="Add Sangeet event to my timeline on 2024-08-03T18:00:00, with music and dance at Grand Ballroom.")])
     responses = []

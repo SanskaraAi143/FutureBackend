@@ -187,15 +187,11 @@ async def execute_supabase_sql(sql: str, params: Optional[Dict[str, Any]] = None
 
             # Attempt to parse as JSON directly first
             try:
-                parsed_data = json.loads(text_response)
-                return {"status": "success", "data": parsed_data}
-            except json.JSONDecodeError:
-                # If direct JSON load fails, try extracting JSON-like string if it's embedded
-                logger.warning(f"execute_supabase_sql: Direct JSON parsing failed for: {text_response}. Attempting extraction.")
                 extracted_data = extract_untrusted_json(text_response)
                 if extracted_data is not None:
-                    return {"status": "success", "data": extracted_data}
-
+                    return extracted_data[0]
+            except json.JSONDecodeError:
+                # If direct JSON load fails, try extracting JSON-like string if it's embedded               
                 # If still no valid JSON, and it's not an obvious error structure from MCP itself:
                 logger.error(f"execute_supabase_sql: Failed to parse MCP response as JSON. Response text: {text_response}")
                 return {"status": "error", "error": "Failed to parse database response.", "details": text_response}
