@@ -53,6 +53,7 @@ CREATE TABLE vendors (
     details JSONB, -- Additional details 
     portfolio_image_urls TEXT[], -- URLs to Supabase Storage
     is_active BOOLEAN DEFAULT true,
+    status VARCHAR(50) DEFAULT 'active', -- New column for overall vendor status
     supabase_auth_uid UUID UNIQUE NULL REFERENCES auth.users(id), -- Supabase Auth ID of primary vendor owner/admin
     is_verified BOOLEAN DEFAULT false, -- For platform admins to verify vendors
     commission_rate DECIMAL(5,2) DEFAULT 0.05, -- Platform's commission rate for this vendor

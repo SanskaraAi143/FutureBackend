@@ -4,18 +4,19 @@ from google.adk.tools import ToolContext # For type hinting context
 
 # Import astra_db from the config location
 from ..config import astra_db # Relative import
+import json
 
 # Configure logging for this module
 logger = logging.getLogger(__name__)
 
-async def search_rituals(question: str, limit: int = 3) -> Dict[str, Any]: # Removed context
+async def search_rituals(question: str, limit: int = 3, context: ToolContext = None):
     """
     Searches for rituals in Astra DB using vector search based on a question.
 
     Args:
         question (str): The user's query or question about rituals. Must be a non-empty string.
         limit (int): The maximum number of relevant documents to return. Defaults to 3. Must be positive.
-        # context (Optional[ToolContext]): The ADK ToolContext. (Removed for schema compatibility)
+        context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any]:
@@ -36,7 +37,7 @@ async def search_rituals(question: str, limit: int = 3) -> Dict[str, Any]: # Rem
 
     Example Usage:
         ```python
-        response = await search_rituals("Tell me about the Haldi ceremony.", limit=5)
+        response = await search_rituals("Tell me about the Haldi ceremony.", limit=5, context=context)
         if response["status"] == "success":
             if response["data"]:
                 for ritual_doc in response["data"]:
@@ -47,6 +48,14 @@ async def search_rituals(question: str, limit: int = 3) -> Dict[str, Any]: # Rem
             print(f"Error searching rituals: {response['error']}")
         ```
     """
+    if context is None:
+        logger.warning("search_rituals: ToolContext not provided. Caching will not be used.")
+
+    cache_key = f"search_rituals:{question}:{limit}"
+    if context and cache_key in context.state:
+        logger.info(f"search_rituals: Returning cached data for question: '{question}', limit: {limit}")
+        return {"status": "success", "data": context.state[cache_key]}
+
     if not question or not isinstance(question, str):
         msg = "Invalid input: 'question' must be a non-empty string."
         logger.error(f"search_rituals: {msg}")
@@ -96,7 +105,9 @@ async def search_rituals(question: str, limit: int = 3) -> Dict[str, Any]: # Rem
             logger.info(f"search_rituals: No rituals found for query: '{question}'")
             return {"status": "success", "data": [], "message": "No rituals found matching the query."}
 
-        logger.info(f"search_rituals: Successfully retrieved {len(documents)} ritual(s) for query: '{question}'")
+        if context:
+            context.state[cache_key] = documents # Cache the result
+        logger.info(f"search_rituals: Successfully retrieved {len(documents)} ritual(s) for query: '{question}'. Cached: {bool(context)}")
         return {"status": "success", "data": documents}
 
     except Exception as e:
@@ -126,17 +137,17 @@ if __name__ == '__main__':
 
         test_question_valid = "What is Kanyadaan?"
         print(f"\nSearching for: '{test_question_valid}'")
-        response_valid = await search_rituals(test_question_valid, limit=2)
+        response_valid = await search_rituals(test_question_valid, limit=2, context=ToolContext())
         print(f"Response: {json.dumps(response_valid, indent=2)}")
 
         test_question_empty = ""
         print(f"\nSearching for empty question: '{test_question_empty}'")
-        response_empty = await search_rituals(test_question_empty)
+        response_empty = await search_rituals(test_question_empty, context=ToolContext())
         print(f"Response: {json.dumps(response_empty, indent=2)}")
 
         test_question_no_results = "Tell me about alien wedding customs on Mars"
         print(f"\nSearching for: '{test_question_no_results}'")
-        response_no_results = await search_rituals(test_question_no_results)
+        response_no_results = await search_rituals(test_question_no_results, context=ToolContext())
         print(f"Response: {json.dumps(response_no_results, indent=2)}")
 
 

@@ -2,25 +2,25 @@
 
 ## Core Database Tools
 ### User Management Tools
-- [x] get_user_id(email: str, context: ToolContext) -> ToolResult
-- [x] get_user_data(user_id: str, context: ToolContext) -> ToolResult
-- [x] update_user_data(user_id: str, data: dict, context: ToolContext) -> ToolResult
-- [x] get_user_activities(user_id: str, context: ToolContext) -> List[dict]
+- [x] get_user_id(email: str, context: ToolContext)
+- [x] get_user_data(user_id: str, context: ToolContext)
+- [x] update_user_data(user_id: str, data: dict, context: ToolContext)
+- [x] get_user_activities(user_id: str, context: ToolContext)
 
 ### Vendor Management Tools
-- [x] list_vendors(filters: Optional[dict], context: ToolContext) -> ToolResult
-- [x] get_vendor_details(vendor_id: str, context: ToolContext) -> ToolResult
-- [ ] check_vendor_availability(vendor_id: str, date: str) -> bool
-- [ ] search_vendors(category: str, location: str, budget_range: dict, ratings: float, keywords: list) -> List[dict]
-- [ ] update_vendor_status(vendor_id: str, status: str) -> dict
+- [x] list_vendors(filters: Optional[dict], context: ToolContext)
+- [x] get_vendor_details(vendor_id: str, context: ToolContext)
+- [x] check_vendor_availability(vendor_id: str, date: str, context: ToolContext)
+- [x] search_vendors(category: str, location: str, budget_range: dict, ratings: float, keywords: list, context: ToolContext)
+- [x] update_vendor_status(vendor_id: str, status: str, context: ToolContext)
 
 ### Budget Management Tools
-- [x] add_budget_item(user_id: str, item: dict, vendor_name: str, status: str, context: ToolContext) -> ToolResult
-- [x] get_budget_items(user_id: str, context: ToolContext) -> ToolResult
-- [x] update_budget_item(item_id: str, data: dict, context: ToolContext) -> ToolResult
-- [x] delete_budget_item(item_id: str, context: ToolContext) -> ToolResult
-- [ ] get_budget_summary(user_id: str) -> dict
-- [ ] analyze_budget_status(user_id: str) -> dict
+- [x] add_budget_item(user_id: str, item_name: str, category: str, amount: float, vendor_name: Optional[str], status: Optional[str], context: ToolContext)
+- [x] get_budget_items(user_id: str, context: ToolContext)
+- [x] update_budget_item(item_id: str, data: dict, context: ToolContext)
+- [x] delete_budget_item(item_id: str, context: ToolContext)
+- [x] get_budget_summary(user_id: str, context: ToolContext)
+- [x] analyze_budget_status(user_id: str, context: ToolContext)
 
 ## Multi-modal Processing Tools
 ### Image Processing Tools
@@ -56,25 +56,9 @@
 
 ## Event & Timeline Tools
 ### Timeline Management
-- [x] create_timeline_event(user_id: str, event: dict) -> dict
-    - Creates a timeline event for a user.
-    - Input:
-        - user_id (str): The user's UUID.
-        - event (dict): A dictionary containing the event details:
-            - event_name (str): The name of the event.
-            - start_time (str): The start time of the event (ISO format).
-            - end_time (str): The end time of the event (ISO format).
-            - description (str): A description of the event.
-            - details (dict, optional): Additional event details (e.g., {"dress_code": "festive"}).
-    - Output:
-        dict: A dictionary with the following structure:
-          - "status": "success" or "error"
-          - If "status" is "success":
-            - "data": A dictionary containing the inserted event data.
-          - If "status" is "error":
-            - "error": A description of the error.
-- [x] update_timeline_event(event_id: str, updates: dict) -> dict
-- [x] get_timeline_events(user_id: str) -> List[dict]
+- [x] create_timeline_event(user_id: str, event_name: str, event_date_time: str, description: Optional[str], location: Optional[str], context: ToolContext)
+- [x] update_timeline_event(event_id: str, updates: dict, context: ToolContext)
+- [x] get_timeline_events(user_id: str, context: ToolContext)
 - [ ] check_timeline_conflicts(events: List[dict]) -> List[dict]
 - [ ] optimize_timeline(events: List[dict]) -> List[dict]
 
@@ -85,7 +69,7 @@
 
 ## Ritual & Cultural Tools
 ### Ritual Management
-- [x] search_rituals(query: str) -> List[dict]
+- [x] search_rituals(question: str, limit: int, context: ToolContext)
 - [ ] get_ritual_details(ritual_id: str) -> dict
 - [ ] get_ritual_items(ritual_id: str) -> List[dict]
 - [ ] get_regional_variations(ritual_id: str, region: str) -> List[dict]
@@ -157,8 +141,8 @@
 - [ ] retry_failed_activity(activity_id: str) -> dict
 
 Total Tools Count: 71
-- Implemented: 8
-- To Be Implemented: 63
+- Implemented: 19
+- To Be Implemented: 52
 
 ## Implementation Priority Order:
 1. Core Database Tools (remaining)
