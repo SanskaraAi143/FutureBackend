@@ -8,11 +8,12 @@ import json
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Get the directory where deploy.py is located, which is multi_agent_orchestrator/
-# This will be the base for agent discovery if get_fast_api_app uses it.
-# AGENT_DIR will point to the 'multi_agent_orchestrator' directory.
-AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
-logging.info(f"Agent directory set to: {AGENT_DIR}")
+# AGENT_DIR should point to the main Python package containing the agents.
+# deploy.py is in multi_agent_orchestrator/deployment/
+# The main agent package is now one level up: multi_agent_orchestrator/
+DEPLOY_FILE_DIR = os.path.dirname(os.path.abspath(__file__))
+AGENT_DIR = os.path.abspath(os.path.join(DEPLOY_FILE_DIR, '..'))
+logging.info(f"Agent directory set for ADK discovery to: {AGENT_DIR}")
 
 # Example session DB URL (e.g., SQLite)
 # For SQLite, the path needs to be relative to where the app runs or an absolute path.
@@ -46,9 +47,9 @@ try:
         # Let's ensure the path is made absolute from the project root (two levels above AGENT_DIR)
         # if it's a relative path starting with './'
         if db_path_full.startswith("./"):
-            # AGENT_DIR is multi_agent_orchestrator/, so its parent is the project root.
-            project_root = os.path.dirname(AGENT_DIR)
-            db_path_full = os.path.join(project_root, db_path_full.lstrip("./"))
+            # AGENT_DIR is multi_agent_orchestrator/ (the container and package root)
+            # SESSION_DB_URL = "sqlite:///./sessions.db" should resolve to multi_agent_orchestrator/sessions.db
+            db_path_full = os.path.join(AGENT_DIR, db_path_full.lstrip("./"))
 
         db_dir = os.path.dirname(db_path_full)
         if db_dir and not os.path.exists(db_dir):
@@ -95,11 +96,9 @@ if __name__ == "__main__":
     # This allows running the app directly using: python multi_agent_orchestrator/deploy.py
     # The CWD should ideally be the repository root for consistent relative path handling (e.g. for .env, sessions.db)
 
-    # To ensure .env is loaded from repo root if this script is run directly:
+    # To ensure .env is loaded from multi_agent_orchestrator/.env if this script is run directly:
     # AGENT_DIR is multi_agent_orchestrator/ (the new project package root)
-    # Project root is one level up from AGENT_DIR.
-    project_root_for_env = os.path.dirname(AGENT_DIR)
-    dotenv_path = os.path.join(project_root_for_env, '.env')
+    dotenv_path = os.path.join(AGENT_DIR, '.env')
     if os.path.exists(dotenv_path):
         from dotenv import load_dotenv
         load_dotenv(dotenv_path=dotenv_path)

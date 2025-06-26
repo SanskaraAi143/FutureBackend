@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 
-from multi_agent_orchestrator.tools import get_user_id, get_user_data, update_user_data # Corrected import
+from ...tools import get_user_id, get_user_data, update_user_data # Relative import for tools
 # No longer need placeholders:
 # def get_user_id(*args, **kwargs): pass
 # def get_user_data(*args, **kwargs): pass

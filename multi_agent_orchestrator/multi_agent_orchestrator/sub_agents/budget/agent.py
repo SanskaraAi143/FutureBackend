@@ -1,7 +1,7 @@
 from google.adk.agents import LlmAgent
 from .prompt import BUDGET_PROMPT
 
-from multi_agent_orchestrator.tools import ( # Corrected import
+from ...tools import ( # Relative import for tools
     add_budget_item,
     get_budget_items,
     update_budget_item,
