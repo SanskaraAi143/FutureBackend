@@ -9,4 +9,3 @@ asyncpg
 supabase
 astrapy
 google-generativeai
-livekit-api

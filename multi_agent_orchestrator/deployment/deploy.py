@@ -97,6 +97,12 @@ if app: # Only if app was initialized (or is the dummy error app)
     # For actual implementation, refer to google.generativeai documentation for client setup
     # and streaming STT/TTS. This is a placeholder structure.
 
+    # Initialize Gemini Live API clients
+    # Assuming API key is available via environment variables or similar
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+    stt_model = genai.get_default_speech_model()
+    tts_model = genai.get_default_text_to_speech_model()
+
     # Configure ADK Runner for the root_agent
     # Using InMemorySessionService for simplicity in this example.
     # For production, consider a persistent session service.
@@ -123,9 +129,7 @@ if app: # Only if app was initialized (or is the dummy error app)
 
         async def client_to_agent_messaging():
             try:
-                # Placeholder for Gemini Live STT streaming
-                # In a real scenario, you'd initialize a streaming STT client from google.generativeai
-                # and feed it audio chunks from client_audio_queue.
+                # Gemini Live STT streaming
                 # The STT client would then yield transcripts.
                 
                 # For demonstration, we'll simulate a transcript after receiving some audio.
@@ -136,23 +140,28 @@ if app: # Only if app was initialized (or is the dummy error app)
                     
                     logging.debug(f"Received audio chunk for STT (size: {len(audio_chunk)} bytes)")
                     
-                    # Simulate a transcript after a certain amount of audio or a silence detection
                     # This part needs to be replaced with actual Gemini Live STT integration
-                    transcript = "This is a simulated transcript from Gemini Live STT." 
+                    # Assuming stt_model.generate_content takes audio bytes and streams text
+                    stt_response_stream = stt_model.generate_content(types.Part(mime_type="audio/wav", data=audio_chunk), stream=True)
                     
-                    if transcript: # Assuming a non-empty transcript means a final result
-                        logging.info(f"Final transcript from STT: {transcript}")
-                        user_message = types.Content(role='user', parts=[types.Part(text=transcript)])
-                        async for event in adk_runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
-                            if event.is_final_response():
-                                if event.content and event.content.parts:
-                                    agent_text_queue.put_nowait(event.content.parts[0].text)
-                                    logging.info(f"Agent final response sent to TTS queue: {event.content.parts[0].text}")
-                                break
-                            elif event.actions and event.actions.escalate:
-                                logging.warning(f"Agent escalated: {getattr(event, 'error_message', 'No specific error message provided.')}")
-                                agent_text_queue.put_nowait("I'm sorry, I encountered an issue and need to escalate.")
-                                break
+                    transcript = ""
+                    for chunk in stt_response_stream:
+                        if chunk.text:
+                            transcript += chunk.text
+                            if chunk.is_final: # Assuming is_final indicates a complete utterance
+                                logging.info(f"Final transcript from STT: {transcript}")
+                                user_message = types.Content(role='user', parts=[types.Part(text=transcript)])
+                                async for event in adk_runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
+                                    if event.is_final_response():
+                                        if event.content and event.content.parts:
+                                            agent_text_queue.put_nowait(event.content.parts[0].text)
+                                            logging.info(f"Agent final response sent to TTS queue: {event.content.parts[0].text}")
+                                        break
+                                    elif event.actions and event.actions.escalate:
+                                        logging.warning(f"Agent escalated: {getattr(event, 'error_message', 'No specific error message provided.')}")
+                                        agent_text_queue.put_nowait("I'm sorry, I encountered an issue and need to escalate.")
+                                        break
+                                transcript = "" # Reset for next utterance
             except Exception as e:
                 logging.error(f"Error in client_to_agent_messaging: {e}", exc_info=True)
             finally:
@@ -165,18 +174,19 @@ if app: # Only if app was initialized (or is the dummy error app)
                     if text_to_speak is None: # Signal to close the stream
                         break
 
-                    # Placeholder for Gemini Live TTS synthesis
-                    # In a real scenario, you'd use a Gemini Live TTS client to synthesize audio
-                    # from text_to_speak and send the resulting audio bytes to the client.
+                    # Gemini Live TTS synthesis
                     logging.debug(f"Requesting TTS for text: {text_to_speak[:30]}...")
                     
-                    # Simulate audio content for testing purposes
-                    audio_content = b"simulated_audio_bytes" # Replace with actual Gemini Live TTS output
+                    # Assuming tts_model.generate_content takes text and streams audio bytes
+                    tts_response_stream = tts_model.generate_content(text_to_speak, stream=True)
                     
-                    if audio_content:
-                        # Send audio bytes back to client (Base64 encoded)
-                        await websocket.send_text(base64.b64encode(audio_content).decode('utf-8'))
-                        logging.info(f"Sent audio chunk to client for text: {text_to_speak[:30]}...")
+                    for chunk in tts_response_stream:
+                        if chunk.audio:
+                            audio_content = chunk.audio.data
+                            if audio_content:
+                                # Send audio bytes back to client (Base64 encoded)
+                                await websocket.send_text(base64.b64encode(audio_content).decode('utf-8'))
+                                logging.info(f"Sent audio chunk to client for text: {text_to_speak[:30]}...")
 
             except Exception as e:
                 logging.error(f"Error in agent_to_client_messaging: {e}", exc_info=True)
