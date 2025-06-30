@@ -92,7 +92,127 @@ def configure_custom_routes(current_app: FastAPI):
 if app: # Only if app was initialized (or is the dummy error app)
     configure_custom_routes(app)
 
-if __name__ == "__main__":
+    # Initialize Gemini Live API clients
+    # Assuming API key is available via environment variables or similar
+    # For actual implementation, refer to google.generativeai documentation for client setup
+    # and streaming STT/TTS. This is a placeholder structure.
+
+    # Configure ADK Runner for the root_agent
+    # Using InMemorySessionService for simplicity in this example.
+    # For production, consider a persistent session service.
+    session_service = InMemorySessionService()
+    adk_runner = Runner(
+        agent=root_agent,
+        app_name="sanskara_ai_voice_orchestrator", # A unique app name for this runner
+        session_service=session_service
+    )
+    logging.info("ADK Runner initialized for voice orchestration.")
+
+    @app.websocket("/ws/voice_chat/{user_id}")
+    async def websocket_endpoint(websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        logging.info(f"WebSocket accepted for user: {user_id}")
+
+        session_id = f"{user_id}_session"  # Generate a unique session ID for the user
+        await session_service.create_session(app_name=adk_runner.app_name,user_id= user_id,session_id= session_id)
+        logging.info(f"ADK session created for user {user_id}: {session_id}")
+
+        # Queues for inter-task communication
+        client_audio_queue = asyncio.Queue()
+        agent_text_queue = asyncio.Queue()
+
+        async def client_to_agent_messaging():
+            try:
+                # Placeholder for Gemini Live STT streaming
+                # In a real scenario, you'd initialize a streaming STT client from google.generativeai
+                # and feed it audio chunks from client_audio_queue.
+                # The STT client would then yield transcripts.
+                
+                # For demonstration, we'll simulate a transcript after receiving some audio.
+                while True:
+                    audio_chunk = await client_audio_queue.get()
+                    if audio_chunk is None: # Signal to close the stream
+                        break
+                    
+                    logging.debug(f"Received audio chunk for STT (size: {len(audio_chunk)} bytes)")
+                    
+                    # Simulate a transcript after a certain amount of audio or a silence detection
+                    # This part needs to be replaced with actual Gemini Live STT integration
+                    transcript = "This is a simulated transcript from Gemini Live STT." 
+                    
+                    if transcript: # Assuming a non-empty transcript means a final result
+                        logging.info(f"Final transcript from STT: {transcript}")
+                        user_message = types.Content(role='user', parts=[types.Part(text=transcript)])
+                        async for event in adk_runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
+                            if event.is_final_response():
+                                if event.content and event.content.parts:
+                                    agent_text_queue.put_nowait(event.content.parts[0].text)
+                                    logging.info(f"Agent final response sent to TTS queue: {event.content.parts[0].text}")
+                                break
+                            elif event.actions and event.actions.escalate:
+                                logging.warning(f"Agent escalated: {getattr(event, 'error_message', 'No specific error message provided.')}")
+                                agent_text_queue.put_nowait("I'm sorry, I encountered an issue and need to escalate.")
+                                break
+            except Exception as e:
+                logging.error(f"Error in client_to_agent_messaging: {e}", exc_info=True)
+            finally:
+                await client_audio_queue.put(None) # Signal generator to stop
+
+        async def agent_to_client_messaging():
+            try:
+                while True:
+                    text_to_speak = await agent_text_queue.get()
+                    if text_to_speak is None: # Signal to close the stream
+                        break
+
+                    # Placeholder for Gemini Live TTS synthesis
+                    # In a real scenario, you'd use a Gemini Live TTS client to synthesize audio
+                    # from text_to_speak and send the resulting audio bytes to the client.
+                    logging.debug(f"Requesting TTS for text: {text_to_speak[:30]}...")
+                    
+                    # Simulate audio content for testing purposes
+                    audio_content = b"simulated_audio_bytes" # Replace with actual Gemini Live TTS output
+                    
+                    if audio_content:
+                        # Send audio bytes back to client (Base64 encoded)
+                        await websocket.send_text(base64.b64encode(audio_content).decode('utf-8'))
+                        logging.info(f"Sent audio chunk to client for text: {text_to_speak[:30]}...")
+
+            except Exception as e:
+                logging.error(f"Error in agent_to_client_messaging: {e}", exc_info=True)
+            finally:
+                logging.info("agent_to_client_messaging task finished.")
+
+
+        # Start the background tasks
+        producer_task = asyncio.create_task(client_to_agent_messaging())
+        consumer_task = asyncio.create_task(agent_to_client_messaging())
+
+        try:
+            while True:
+                # Receive audio chunks from the client
+                message = await websocket.receive_bytes()
+                if message == b"END_STREAM": # Client signals end of audio stream
+                    await client_audio_queue.put(None)
+                    logging.info("Client signaled end of audio stream.")
+                    break # Exit loop, allowing tasks to complete
+                
+                # Assuming client sends raw audio bytes
+                audio_bytes = message
+                await client_audio_queue.put(audio_bytes)
+
+        except WebSocketDisconnect:
+            logging.info(f"WebSocket disconnected for user: {user_id}")
+        except Exception as e:
+            logging.error(f"Error receiving from WebSocket for user {user_id}: {e}", exc_info=True)
+        finally:
+            # Ensure tasks are cancelled/cleaned up
+            producer_task.cancel()
+            consumer_task.cancel()
+            await asyncio.gather(producer_task, consumer_task, return_exceptions=True) # Wait for tasks to finish cancelling
+            logging.info(f"WebSocket connection closed and tasks cleaned up for user: {user_id}")
+
+
     # This allows running the app directly using: python multi_agent_orchestrator/deploy.py
     # The CWD should ideally be the repository root for consistent relative path handling (e.g. for .env, sessions.db)
 

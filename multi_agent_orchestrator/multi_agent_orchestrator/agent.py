@@ -1,20 +1,5 @@
 # main_orchestrator_agent.py - Main Orchestrator for the Sanskara AI application
-import asyncio
-from google.adk.runners import Runner # Will be needed for examples/testing, not directly by agent def
-from google.adk.sessions import InMemorySessionService # Same as above
-from dotenv import load_dotenv # For examples/testing
-import os # For examples/testing
-
 from google.adk.agents import LlmAgent
-# Removed Event, EventActions, LlmRequest, LlmResponse, CallbackContext, InvocationContext if not directly used by OrchestratorAgent
-# from google.adk.events import Event, EventActions
-# from google.adk.models import LlmRequest,LlmResponse
-# from google.adk.agents.callback_context import CallbackContext
-# from google.adk.agents.invocation_context import InvocationContext
-from typing import List, Dict, Any # Optional, Callable removed if not used
-# from opik.integrations.adk import OpikTracer # OpikTracer removed for now
-# from google.adk.planners import PlanReActPlanner # PlanReActPlanner removed for now
-# from google.adk.memory import BaseMemoryService,InMemoryMemoryService # Memory services removed for now
 
 from .sub_agents.onboarding import onboarding_agent
 from .sub_agents.ritual_search import ritual_search_agent
@@ -29,7 +14,6 @@ from .tools import create_timeline_event, get_timeline_events, update_timeline_e
 from .prompt import ORCHESTRATOR_PROMPT # Import the prompt
 
 import logging
-from google.genai import types # For examples/testing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

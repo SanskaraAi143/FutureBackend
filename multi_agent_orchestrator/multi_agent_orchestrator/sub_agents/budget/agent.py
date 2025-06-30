@@ -1,7 +1,7 @@
 from google.adk.agents import LlmAgent
 from .prompt import BUDGET_PROMPT
 
-from ...tools import ( # Relative import for tools
+from ...tools import (
     add_budget_item,
     get_budget_items,
     update_budget_item,
@@ -9,7 +9,6 @@ from ...tools import ( # Relative import for tools
     get_user_data,
     update_user_data
 )
-# No longer need placeholders
 
 budget_agent = LlmAgent(
     name="BudgetAgent",
@@ -26,3 +25,4 @@ budget_agent = LlmAgent(
     ],
     output_key="budget_state",
 )
+

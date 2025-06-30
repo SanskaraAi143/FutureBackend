@@ -72,7 +72,7 @@ SUPABASE_KEY=your_supabase_key
 
 - **Run the main agent:**
   ```bash
-  python agent.py
+  python examples/run_orchestrator.py
   ```
   This will start the orchestrator agent, which manages onboarding, ritual, budget, and vendor flows.
 

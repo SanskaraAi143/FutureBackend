@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADK Streaming Voice Chat Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #controls button { margin: 5px; padding: 10px 20px; font-size: 16px; }
+        #messages { border: 1px solid #ccc; padding: 10px; min-height: 200px; margin-top: 20px; overflow-y: scroll; }
+        .user-message { color: blue; }
+        .agent-message { color: green; }
+        .error-message { color: red; }
+    </style>
+</head>
+<body>
+    <h1>ADK Streaming Voice Chat Client</h1>
+
+    <div id="controls">
+        <button id="startButton">Start Streaming</button>
+        <button id="stopButton" disabled>Stop Streaming</button>
+        <button id="connectButton">Connect WebSocket</button>
+        <button id="disconnectButton" disabled>Disconnect WebSocket</button>
+    </div>
+
+    <div id="messages"></div>
+
+    <script>
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const connectButton = document.getElementById('connectButton');
+        const disconnectButton = document.getElementById('disconnectButton');
+        const messagesDiv = document.getElementById('messages');
+
+        let audioContext;
+        let audioInput;
+        let processor;
+        let websocket;
+        let audioQueue = [];
+        let isPlaying = false;
+
+        const sampleRate = 16000; // Google STT expects 16kHz
+        const bufferSize = 4096; // Process audio in chunks of this size
+
+        const userId = 'test_user_' + Math.random().toString(36).substring(2, 9); // Unique user ID
+
+        function appendMessage(text, type) {
+            const p = document.createElement('p');
+            p.textContent = text;
+            p.className = type;
+            messagesDiv.appendChild(p);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Function to convert float32 to 16-bit PCM
+        function floatTo16BitPCM(input) {
+            const output = new Int16Array(input.length);
+            for (let i = 0; i < input.length; i++) {
+                let s = Math.max(-1, Math.min(1, input[i]));
+                output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            return output.buffer;
+        }
+
+        connectButton.onclick = () => {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                appendMessage('WebSocket already connected.', 'info');
+                return;
+            }
+
+            websocket = new WebSocket(`ws://localhost:8000/ws/voice_chat/${userId}`);
+            websocket.binaryType = 'arraybuffer'; // Expect binary data for audio
+
+            websocket.onopen = () => {
+                appendMessage('WebSocket connected.', 'info');
+                connectButton.disabled = true;
+                disconnectButton.disabled = false;
+                startButton.disabled = false;
+            };
+
+            websocket.onmessage = async (event) => {
+                // Assuming server sends raw audio bytes (ArrayBuffer)
+                const audioData = event.data;
+                if (audioData instanceof ArrayBuffer) {
+                    audioQueue.push(audioData);
+                    if (!isPlaying) {
+                        playNextAudioChunk();
+                    }
+                } else {
+                    appendMessage('Received non-binary data from WebSocket.', 'error');
+                }
+            };
+
+            websocket.onclose = () => {
+                appendMessage('WebSocket disconnected.', 'info');
+                connectButton.disabled = false;
+                disconnectButton.disabled = true;
+                startButton.disabled = true;
+                stopButton.disabled = true;
+                isPlaying = false;
+                audioQueue = [];
+                if (audioContext) {
+                    audioContext.close();
+                }
+            };
+
+            websocket.onerror = (error) => {
+                appendMessage('WebSocket error: ' + error.message, 'error');
+            };
+        };
+
+        disconnectButton.onclick = () => {
+            if (websocket) {
+                websocket.close();
+            }
+        };
+
+        startButton.onclick = async () => {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sampleRate });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: sampleRate } });
+                audioInput = audioContext.createMediaStreamSource(stream);
+
+                // Create a ScriptProcessorNode to process audio chunks
+                processor = audioContext.createScriptProcessor(bufferSize, 1, 1); // 1 input channel, 1 output channel (mono)
+
+                processor.onaudioprocess = (event) => {
+                    const inputBuffer = event.inputBuffer.getChannelData(0); // Get mono channel
+                    const pcm16 = floatTo16BitPCM(inputBuffer); // Convert to 16-bit PCM
+
+                    if (websocket && websocket.readyState === WebSocket.OPEN) {
+                        websocket.send(pcm16); // Send raw binary data
+                    }
+                };
+
+                audioInput.connect(processor);
+                processor.connect(audioContext.destination); // Connect to destination to keep it alive
+
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                appendMessage('Streaming audio started...', 'info');
+            } catch (e) {
+                appendMessage('Error starting audio stream: ' + e.message, 'error');
+            }
+        };
+
+        stopButton.onclick = () => {
+            if (processor) {
+                processor.disconnect();
+                audioInput.disconnect();
+                // Signal end of stream to server
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    websocket.send("END_STREAM"); // Custom signal for server
+                }
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                appendMessage('Streaming audio stopped.', 'info');
+            }
+        };
+
+        async function playNextAudioChunk() {
+            if (audioQueue.length > 0 && !isPlaying) {
+                isPlaying = true;
+                const audioBytes = audioQueue.shift();
+                try {
+                    // Decode raw PCM audio (assuming LINEAR16 from server)
+                    // Need to create an AudioBuffer from raw PCM
+                    const audioBuffer = audioContext.createBuffer(1, audioBytes.byteLength / 2, sampleRate);
+                    const nowBuffering = audioBuffer.getChannelData(0);
+                    const pcm16 = new Int16Array(audioBytes);
+
+                    for (let i = 0; i < pcm16.length; i++) {
+                        nowBuffering[i] = pcm16[i] / 32768; // Convert 16-bit PCM to float32
+                    }
+
+                    const source = audioContext.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(audioContext.destination);
+                    source.onended = () => {
+                        isPlaying = false;
+                        playNextAudioChunk(); // Play next chunk when current one finishes
+                    };
+                    source.start(0);
+                } catch (e) {
+                    appendMessage('Error playing audio: ' + e.message, 'error');
+                    isPlaying = false;
+                    playNextAudioChunk(); // Try next chunk even if this one failed
+                }
+            }
+        }
+    </script>
+</body>
+</html>

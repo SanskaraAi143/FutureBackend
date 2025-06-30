@@ -15,3 +15,4 @@ ritual_search_agent = LlmAgent(
     ],
     output_key="ritual_search_state",
 )
+
