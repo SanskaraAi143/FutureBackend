@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 UPDATABLE_TIMELINE_EVENT_COLUMNS = {"event_name", "event_date_time", "description", "location"}
 
 
-async def get_timeline_events(user_id: str, context: ToolContext = None) -> Dict[str, Any]:
+async def get_timeline_events(user_id: str, tool_context: ToolContext) -> Dict[str, Any]:
     """
     Retrieves all timeline events for a given user, ordered by event_date_time.
 
     Args:
         user_id (str): The UUID of the user. Must be a non-empty string.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any]:
@@ -34,7 +34,7 @@ async def get_timeline_events(user_id: str, context: ToolContext = None) -> Dict
 
     Example Usage:
         ```python
-        response = await get_timeline_events("user-uuid-123", context)
+        response = await get_timeline_events("user-uuid-123", tool_context)
         if response["status"] == "success":
             for event in response["data"]:
                 print(f"{event['event_name']} at {event['event_date_time']}")
@@ -42,13 +42,13 @@ async def get_timeline_events(user_id: str, context: ToolContext = None) -> Dict
             print(f"Error: {response['error']}")
         ```
     """
-    if context is None:
+    if tool_context is None:
         logger.warning("get_timeline_events: ToolContext not provided. Caching will not be used.")
 
     cache_key = f"timeline_events:{user_id}"
-    if context and cache_key in context.state:
+    if tool_context and cache_key in tool_context.state:
         logger.info(f"get_timeline_events: Returning cached timeline events for user_id: {user_id}")
-        return {"status": "success", "data": context.state[cache_key]}
+        return {"status": "success", "data": tool_context.state[cache_key]}
 
     if not user_id or not isinstance(user_id, str):
         msg = "Invalid user_id. Must be a non-empty string."
@@ -67,9 +67,9 @@ async def get_timeline_events(user_id: str, context: ToolContext = None) -> Dict
             return {"status": "error", "error": result['error']}
 
         if isinstance(result, list):
-            if context:
-                context.state[cache_key] = result # Cache the result
-            logger.info(f"get_timeline_events: Successfully retrieved {len(result)} events for user {user_id}. Cached: {bool(context)}")
+            if tool_context:
+                tool_context.state[cache_key] = result # Cache the result
+            logger.info(f"get_timeline_events: Successfully retrieved {len(result)} events for user {user_id}. Cached: {bool(tool_context)}")
             return {"status": "success", "data": result}
         else:
             logger.warning(f"get_timeline_events: Unexpected result format for user {user_id}. Result: {result}")
@@ -84,9 +84,9 @@ async def create_timeline_event(
     user_id: str,
     event_name: str,
     event_date_time: str, # Expecting ISO format string e.g., "YYYY-MM-DDTHH:MM:SS"
+    tool_context: ToolContext,
     description: Optional[str] = None,
-    location: Optional[str] = None,
-    context: ToolContext = None
+    location: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Creates a new timeline event for a specified user.
@@ -98,7 +98,7 @@ async def create_timeline_event(
                                (e.g., "2024-12-20T18:00:00"). Validation for actual datetime format is not done here.
         description (Optional[str]): Optional description for the event.
         location (Optional[str]): Optional location of the event.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any]:
@@ -122,14 +122,14 @@ async def create_timeline_event(
             "description": "Turmeric ceremony at home.",
             "location": "Bride's Residence"
         }
-        response = await create_timeline_event(**event_data, context=context)
+        response = await create_timeline_event(**event_data, tool_context=tool_context)
         if response["status"] == "success":
             print("Event created:", response["data"])
         else:
             print(f"Error: {response['error']}")
         ```
     """
-    if context is None:
+    if tool_context is None:
         logger.warning("create_timeline_event: ToolContext not provided. Cache invalidation will not occur.")
 
     if not all([user_id, event_name, event_date_time]) or \
@@ -166,11 +166,11 @@ async def create_timeline_event(
             created_data = result
 
         if created_data:
-            if context:
+            if tool_context:
                 # Invalidate relevant timeline events cache for this user
-                if f"timeline_events:{user_id}" in context.state:
-                    del context.state[f"timeline_events:{user_id}"]
-            logger.info(f"create_timeline_event: Successfully created event_id {created_data.get('event_id')} for user {user_id}. Cache invalidated: {bool(context)}")
+                if f"timeline_events:{user_id}" in tool_context.state:
+                    del tool_context.state[f"timeline_events:{user_id}"]
+            logger.info(f"create_timeline_event: Successfully created event_id {created_data.get('event_id')} for user {user_id}. Cache invalidated: {bool(tool_context)}")
             return {"status": "success", "data": created_data}
         else:
             logger.error(f"create_timeline_event: Create failed or no data returned for user {user_id}, event '{event_name}'. DB Result: {result}")
@@ -184,7 +184,7 @@ async def create_timeline_event(
 async def update_timeline_event(
     event_id: str,
     updates: Dict[str, Any],
-    context: ToolContext = None
+    tool_context: ToolContext
 ) -> Dict[str, Any]:
     """
     Updates an existing timeline event by its event_id.
@@ -193,7 +193,7 @@ async def update_timeline_event(
         event_id (str): The UUID of the timeline event to update. Must be non-empty.
         updates (Dict[str, Any]): Dictionary of fields to update. Only keys in
                                   `UPDATABLE_TIMELINE_EVENT_COLUMNS` will be processed.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any]:
@@ -212,14 +212,14 @@ async def update_timeline_event(
     Example Usage:
         ```python
         update_payload = {"description": "Updated Sangeet details", "location": "New Hall"}
-        response = await update_timeline_event("event-uuid-456", update_payload, context)
+        response = await update_timeline_event("event-uuid-456", update_payload, tool_context)
         if response["status"] == "success":
             print("Event updated:", response["data"])
         else:
             print(f"Update error: {response['error']}")
         ```
     """
-    if context is None:
+    if tool_context is None:
         logger.warning("update_timeline_event: ToolContext not provided. Cache invalidation will not occur.")
 
     if not event_id or not isinstance(event_id, str):
@@ -269,13 +269,13 @@ async def update_timeline_event(
             updated_data = result
 
         if updated_data:
-            if context:
+            if tool_context:
                 # Invalidate relevant timeline events cache for the user associated with this event
                 user_id_for_invalidation = updated_data.get('user_id')
                 if user_id_for_invalidation:
-                    if f"timeline_events:{user_id_for_invalidation}" in context.state:
-                        del context.state[f"timeline_events:{user_id_for_invalidation}"]
-            logger.info(f"update_timeline_event: Successfully updated event_id {event_id}. Cache invalidated: {bool(context)}")
+                    if f"timeline_events:{user_id_for_invalidation}" in tool_context.state:
+                        del tool_context.state[f"timeline_events:{user_id_for_invalidation}"]
+            logger.info(f"update_timeline_event: Successfully updated event_id {event_id}. Cache invalidated: {bool(tool_context)}")
             return {"status": "success", "data": updated_data}
         else:
             logger.error(f"update_timeline_event: Update failed for event_id {event_id} (event possibly not found or no data returned). DB Result: {result}")

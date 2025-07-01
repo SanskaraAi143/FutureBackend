@@ -7,7 +7,7 @@ from ...tools import search_rituals # Relative import for tools
 
 ritual_search_agent = LlmAgent(
     name="RitualSearchAgent",
-    model="gemini-2.0-flash",
+    model="gemini-2.0-flash-exp-image-generation",
     description="Handles ritual search.",
     instruction=RITUAL_PROMPT,
     tools=[

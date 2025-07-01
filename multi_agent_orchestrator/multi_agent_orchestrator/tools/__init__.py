@@ -12,7 +12,7 @@ from .user_tools import (
 
 from .vendor_tools import (
     list_vendors,
-    get_vendor_details,
+    get_vendor_reviews,
     search_vendors
 )
 

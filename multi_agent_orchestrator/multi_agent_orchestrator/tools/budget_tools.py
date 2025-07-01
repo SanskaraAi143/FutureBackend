@@ -17,9 +17,9 @@ async def add_budget_item(
     item_name: str,
     category: str,
     amount: float, # Enforce float for amount
+    tool_context: ToolContext,
     vendor_name: Optional[str] = None,
-    status: Optional[str] = "Pending",
-    context: ToolContext = None
+    status: Optional[str] = "Pending"
 ) -> Dict[str, Any]:
     """
     Adds a new budget item for a specified user.
@@ -31,7 +31,7 @@ async def add_budget_item(
         amount (float): Cost of the budget item. Must be a non-negative number.
         vendor_name (Optional[str]): Name of the associated vendor. Defaults to None.
         status (Optional[str]): Status of the budget item (e.g., "Pending", "Paid"). Defaults to "Pending".
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any]:
@@ -56,14 +56,14 @@ async def add_budget_item(
             "amount": 500.00,
             "status": "Confirmed"
         }
-        response = await add_budget_item(**item_details, context=context)
+        response = await add_budget_item(**item_details, tool_context=tool_context)
         if response["status"] == "success":
             print("Budget item added:", response["data"])
         else:
             print(f"Error: {response['error']}")
         ```
     """
-    if context is None:
+    if tool_context is None:
         logger.warning("add_budget_item: ToolContext not provided. Cache invalidation will not occur.")
 
     if not all([user_id, item_name, category]) or not isinstance(user_id, str) \
@@ -112,14 +112,14 @@ async def add_budget_item(
             item_data = result
 
         if item_data:
-            if context:
+            if tool_context:
                 # Invalidate relevant budget caches for this user
-                for key in list(context.state.keys()):
+                for key in list(tool_context.state.keys()):
                     if key.startswith(f"budget_items:{user_id}") or \
                        key.startswith(f"budget_summary:{user_id}") or \
                        key.startswith(f"budget_analysis:{user_id}"):
-                        del context.state[key]
-            logger.info(f"add_budget_item: Successfully added item_id {item_data.get('item_id')} for user {user_id}. Cache invalidated: {bool(context)}")
+                        del tool_context.state[key]
+            logger.info(f"add_budget_item: Successfully added item_id {item_data.get('item_id')} for user {user_id}. Cache invalidated: {bool(tool_context)}")
             return {"status": "success", "data": item_data}
         else:
             logger.error(f"add_budget_item: Add failed or no data returned for user {user_id}, item '{item_name}'. DB Result: {result}")
@@ -130,13 +130,13 @@ async def add_budget_item(
         return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
 
-async def get_budget_items(user_id: str, context: ToolContext = None) -> Dict[str, Any]:
+async def get_budget_items(user_id: str, tool_context: ToolContext) -> Dict[str, Any]:
     """
     Retrieves all budget items for a specified user.
 
     Args:
         user_id (str): The UUID of the user. Must be a non-empty string.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any>:
@@ -153,7 +153,7 @@ async def get_budget_items(user_id: str, context: ToolContext = None) -> Dict[st
 
     Example Usage:
         ```python
-        response = await get_budget_items("user-uuid-123", context)
+        response = await get_budget_items("user-uuid-123", tool_context)
         if response["status"] == "success":
             for item in response["data"]:
                 print(item["item_name"])
@@ -161,13 +161,13 @@ async def get_budget_items(user_id: str, context: ToolContext = None) -> Dict[st
             print(f"Error: {response['error']}")
         ```
     """
-    if context is None:
+    if tool_context is None:
         logger.warning("get_budget_items: ToolContext not provided. Caching will not be used.")
 
     cache_key = f"budget_items:{user_id}"
-    if context and cache_key in context.state:
+    if tool_context and cache_key in tool_context.state:
         logger.info(f"get_budget_items: Returning cached budget items for user_id: {user_id}")
-        return {"status": "success", "data": context.state[cache_key]}
+        return {"status": "success", "data": tool_context.state[cache_key]}
 
     if not user_id or not isinstance(user_id, str):
         logger.error("get_budget_items: Invalid user_id provided.")
@@ -184,9 +184,9 @@ async def get_budget_items(user_id: str, context: ToolContext = None) -> Dict[st
             return {"status": "error", "error": result['error']}
 
         if isinstance(result, list):
-            if context:
-                context.state[cache_key] = result # Cache the result
-            logger.info(f"get_budget_items: Successfully retrieved {len(result)} items for user {user_id}. Cached: {bool(context)}")
+            if tool_context:
+                tool_context.state[cache_key] = result # Cache the result
+            logger.info(f"get_budget_items: Successfully retrieved {len(result)} items for user {user_id}. Cached: {bool(tool_context)}")
             return {"status": "success", "data": result}
         else:
             logger.warning(f"get_budget_items: Unexpected result format for user {user_id}. Result: {result}")
@@ -198,7 +198,7 @@ async def get_budget_items(user_id: str, context: ToolContext = None) -> Dict[st
         return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
 
-async def update_budget_item(item_id: str, data: Dict[str, Any], context: ToolContext = None) -> Dict[str, Any]:
+async def update_budget_item(item_id: str, data: Dict[str, Any], tool_context: ToolContext) -> Dict[str, Any]:
     """
     Updates an existing budget item by its item_id.
 
@@ -207,7 +207,7 @@ async def update_budget_item(item_id: str, data: Dict[str, Any], context: ToolCo
         data (Dict[str, Any>): Dictionary of fields to update. Only keys in
                                `UPDATABLE_BUDGET_ITEM_COLUMNS` will be processed.
                                Amount will be converted to float; other values used as is.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any>:
@@ -226,14 +226,14 @@ async def update_budget_item(item_id: str, data: Dict[str, Any], context: ToolCo
     Example Usage:
         ```python
         update_payload = {"amount": 1200.50, "status": "Paid"}
-        response = await update_budget_item("item-uuid-456", update_payload, context)
+        response = await update_budget_item("item-uuid-456", update_payload, tool_context)
         if response["status"] == "success":
             print("Item updated:", response["data"])
         else:
             print(f"Update error: {response['error']}")
         ```
     """
-    if context is None:
+    if tool_context is None:
         logger.warning("update_budget_item: ToolContext not provided. Cache invalidation will not occur.")
 
     if not item_id or not isinstance(item_id, str):
@@ -293,17 +293,17 @@ async def update_budget_item(item_id: str, data: Dict[str, Any], context: ToolCo
             updated_data = result
 
         if updated_data:
-            if context:
+            if tool_context:
                 # Invalidate relevant budget caches for the user associated with this item
                 # Assuming user_id can be derived or passed, or we fetch it from the updated_data
                 user_id_for_invalidation = updated_data.get('user_id')
                 if user_id_for_invalidation:
-                    for key in list(context.state.keys()):
+                    for key in list(tool_context.state.keys()):
                         if key.startswith(f"budget_items:{user_id_for_invalidation}") or \
                            key.startswith(f"budget_summary:{user_id_for_invalidation}") or \
                            key.startswith(f"budget_analysis:{user_id_for_invalidation}"):
-                            del context.state[key]
-            logger.info(f"update_budget_item: Successfully updated item_id {item_id}. Cache invalidated: {bool(context)}")
+                            del tool_context.state[key]
+            logger.info(f"update_budget_item: Successfully updated item_id {item_id}. Cache invalidated: {bool(tool_context)}")
             return {"status": "success", "data": updated_data}
         else:
             logger.error(f"update_budget_item: Update failed for item_id {item_id} (item possibly not found or no data returned). DB Result: {result}")
@@ -314,13 +314,13 @@ async def update_budget_item(item_id: str, data: Dict[str, Any], context: ToolCo
         return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
 
-async def delete_budget_item(item_id: str, context: ToolContext = None) -> Dict[str, Any]:
+async def delete_budget_item(item_id: str, tool_context: ToolContext) -> Dict[str, Any]:
     """
     Deletes a budget item by its item_id.
 
     Args:
         item_id (str): The UUID of the budget item to delete. Must be a non-empty string.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any>:
@@ -337,14 +337,14 @@ async def delete_budget_item(item_id: str, context: ToolContext = None) -> Dict[
 
     Example Usage:
         ```python
-        response = await delete_budget_item("item-uuid-789", context)
+        response = await delete_budget_item("item-uuid-789", tool_context)
         if response["status"] == "success":
             print(response["message"])
         else:
             print(f"Delete error: {response['error']}")
         ```
     """
-    if context is None:
+    if tool_context is None:
         logger.warning("delete_budget_item: ToolContext not provided. Cache invalidation will not occur.")
 
     if not item_id or not isinstance(item_id, str):
@@ -373,16 +373,16 @@ async def delete_budget_item(item_id: str, context: ToolContext = None) -> Dict[
             deleted_item = result
 
         if deleted_item:
-            if context:
+            if tool_context:
                 # Invalidate relevant budget caches for the user associated with this item
                 user_id_for_invalidation = deleted_item.get('user_id')
                 if user_id_for_invalidation:
-                    for key in list(context.state.keys()):
+                    for key in list(tool_context.state.keys()):
                         if key.startswith(f"budget_items:{user_id_for_invalidation}") or \
                            key.startswith(f"budget_summary:{user_id_for_invalidation}") or \
                            key.startswith(f"budget_analysis:{user_id_for_invalidation}"):
-                            del context.state[key]
-            logger.info(f"delete_budget_item: Successfully deleted item_id {item_id}. Cache invalidated: {bool(context)}")
+                            del tool_context.state[key]
+            logger.info(f"delete_budget_item: Successfully deleted item_id {item_id}. Cache invalidated: {bool(tool_context)}")
             return {"status": "success", "message": f"Budget item {item_id} deleted successfully.", "data": deleted_item}
         else:
             # This case means the DELETE statement ran but no rows were affected (item_id not found)
@@ -394,23 +394,23 @@ async def delete_budget_item(item_id: str, context: ToolContext = None) -> Dict[
         logger.exception(f"delete_budget_item: Unexpected error for item_id {item_id}: {e}")
         return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
-async def get_budget_summary(user_id: str, context: ToolContext = None) -> Dict[str, Any]:
+async def get_budget_summary(user_id: str, tool_context: ToolContext) -> Dict[str, Any]:
     """
     Calculates and returns a summary of the user's budget.
     Args:
         user_id (str): The user's UUID.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
     Returns:
         Dict[str, Any>:
             On success: `{"status": "success", "data": {"total_budget": ..., "total_spent": ..., "remaining_balance": ...}}`
     """
-    if context is None:
+    if tool_context is None:
         logger.warning("get_budget_summary: ToolContext not provided. Caching will not be used.")
 
     cache_key = f"budget_summary:{user_id}"
-    if context and cache_key in context.state:
+    if tool_context and cache_key in tool_context.state:
         logger.info(f"get_budget_summary: Returning cached budget summary for user_id: {user_id}")
-        return {"status": "success", "data": context.state[cache_key]}
+        return {"status": "success", "data": tool_context.state[cache_key]}
 
     if not user_id or not isinstance(user_id, str):
         return {"status": "error", "error": "Invalid user_id provided."}
@@ -432,8 +432,8 @@ async def get_budget_summary(user_id: str, context: ToolContext = None) -> Dict[
             summary = result[0]
             remaining = summary['total_budget'] - summary['total_spent']
             summary['remaining_balance'] = remaining
-            if context:
-                context.state[cache_key] = summary # Cache the result
+            if tool_context:
+                tool_context.state[cache_key] = summary # Cache the result
             return {"status": "success", "data": summary}
         else:
             return {"status": "success", "data": {"total_budget": 0, "total_spent": 0, "remaining_balance": 0}}
@@ -441,30 +441,30 @@ async def get_budget_summary(user_id: str, context: ToolContext = None) -> Dict[
         logger.exception(f"Error getting budget summary for {user_id}: {e}")
         return {"status": "error", "error": f"An unexpected error occurred: {e}"}
 
-async def analyze_budget_status(user_id: str, context: ToolContext = None) -> Dict[str, Any]:
+async def analyze_budget_status(user_id: str, tool_context: ToolContext) -> Dict[str, Any]:
     """
     Provides a detailed analysis of budget spending by category.
     Args:
         user_id (str): The user's UUID.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
     Returns:
         Dict[str, Any>:
             On success: `{"status": "success", "data": {"category_analysis": [...], "total_budget": ...}}`
     """
-    if context is None:
+    if tool_context is None:
         logger.warning("analyze_budget_status: ToolContext not provided. Caching will not be used.")
 
     cache_key = f"budget_analysis:{user_id}"
-    if context and cache_key in context.state:
+    if tool_context and cache_key in tool_context.state:
         logger.info(f"analyze_budget_status: Returning cached budget analysis for user_id: {user_id}")
-        return {"status": "success", "data": context.state[cache_key]}
+        return {"status": "success", "data": tool_context.state[cache_key]}
 
     if not user_id or not isinstance(user_id, str):
         return {"status": "error", "error": "Invalid user_id provided."}
 
     logger.info(f"Analyzing budget status for user {user_id}")
     # Pass context to get_budget_summary for potential caching benefits
-    summary_response = await get_budget_summary(user_id, context)
+    summary_response = await get_budget_summary(user_id, tool_context)
     if summary_response['status'] == 'error':
         return summary_response
     total_budget = summary_response['data']['total_budget']
@@ -493,8 +493,8 @@ async def analyze_budget_status(user_id: str, context: ToolContext = None) -> Di
                     "percentage_of_budget": round(percentage, 2)
                 })
         
-        if context:
-            context.state[cache_key] = {"category_analysis": analysis, "total_budget": total_budget} # Cache the result
+        if tool_context:
+            tool_context.state[cache_key] = {"category_analysis": analysis, "total_budget": total_budget} # Cache the result
         return {"status": "success", "data": {"category_analysis": analysis, "total_budget": total_budget}}
     except Exception as e:
         logger.exception(f"Error analyzing budget status for {user_id}: {e}")

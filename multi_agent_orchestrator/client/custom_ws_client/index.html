@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADK Custom WebSocket Client</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #controls button { margin: 5px; padding: 10px 20px; font-size: 16px; }
+        #messages { border: 1px solid #ccc; padding: 10px; min-height: 200px; margin-top: 20px; overflow-y: scroll; }
+        .user-message { color: blue; }
+        .agent-message { color: green; }
+        .error-message { color: red; }
+        #messageInput { width: 80%; padding: 10px; margin-right: 10px; }
+        #sendButton { padding: 10px 20px; }
+    </style>
+</head>
+<body>
+    <h1>ADK Custom WebSocket Client</h1>
+
+    <div id="controls">
+        <h2>Text Chat</h2>
+        <button id="connectTextButton">Connect Text WebSocket</button>
+        <button id="disconnectTextButton" disabled>Disconnect Text WebSocket</button>
+    </div>
+
+    <div>
+        <input type="text" id="messageInput" placeholder="Type your message...">
+        <button id="sendButton" disabled>Send</button>
+    </div>
+
+    <div id="audio-controls">
+        <h2>Voice Chat</h2>
+        <button id="connectAudioButton">Connect Audio WebSocket</button>
+        <button id="disconnectAudioButton" disabled>Disconnect Audio WebSocket</button>
+        <button id="startButton" disabled>Start Streaming</button>
+        <button id="stopButton" disabled>Stop Streaming</button>
+    </div>
+
+    <div id="messages"></div>
+
+    <script>
+        const connectTextButton = document.getElementById('connectTextButton');
+        const disconnectTextButton = document.getElementById('disconnectTextButton');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+
+        const connectAudioButton = document.getElementById('connectAudioButton');
+        const disconnectAudioButton = document.getElementById('disconnectAudioButton');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+
+        const messagesDiv = document.getElementById('messages');
+
+        let textWebsocket;
+        let audioWebsocket;
+
+        let audioContext;
+        let audioInput;
+        let processor;
+        let audioQueue = [];
+        let isPlaying = false;
+
+        const sampleRate = 16000; // Google STT expects 16kHz
+        const bufferSize = 4096; // Process audio in chunks of this size
+
+        const userId = 'test_user_' + Math.random().toString(36).substring(2, 9); // Unique user ID
+
+        function appendMessage(text, type) {
+            const p = document.createElement('p');
+            p.textContent = text;
+            p.className = type;
+            messagesDiv.appendChild(p);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Function to convert float32 to 16-bit PCM
+        function floatTo16BitPCM(input) {
+            const output = new Int16Array(input.length);
+            for (let i = 0; i < input.length; i++) {
+                let s = Math.max(-1, Math.min(1, input[i]));
+                output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+            }
+            return output.buffer;
+        }
+
+        // Function to convert ArrayBuffer to Base64 string
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+
+        // Function to convert Base64 string to ArrayBuffer
+        function base64ToArrayBuffer(base64) {
+            const binary_string = window.atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        // Text WebSocket Logic
+        connectTextButton.onclick = () => {
+            if (textWebsocket && textWebsocket.readyState === WebSocket.OPEN) {
+                appendMessage('Text WebSocket already connected.', 'info');
+                return;
+            }
+
+            textWebsocket = new WebSocket(`ws://localhost:8000/ws/text_chat/${userId}`);
+
+            textWebsocket.onopen = () => {
+                appendMessage('Text WebSocket connected.', 'info');
+                connectTextButton.disabled = true;
+                disconnectTextButton.disabled = false;
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+            };
+
+            textWebsocket.onmessage = async (event) => {
+                appendMessage(`Agent: ${event.data}`, 'agent-message');
+            };
+
+            textWebsocket.onclose = () => {
+                appendMessage('Text WebSocket disconnected.', 'info');
+                connectTextButton.disabled = false;
+                disconnectTextButton.disabled = true;
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+            };
+
+            textWebsocket.onerror = (error) => {
+                appendMessage('Text WebSocket error: ' + error.message, 'error');
+            };
+        };
+
+        disconnectTextButton.onclick = () => {
+            if (textWebsocket) {
+                textWebsocket.close();
+            }
+        };
+
+        sendButton.onclick = () => {
+            const message = messageInput.value;
+            if (message.trim() !== '' && textWebsocket && textWebsocket.readyState === WebSocket.OPEN) {
+                textWebsocket.send(message);
+                appendMessage(`You: ${message}`, 'user-message');
+                messageInput.value = '';
+            }
+        };
+
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendButton.click();
+            }
+        });
+
+        // Audio WebSocket Logic
+        connectAudioButton.onclick = () => {
+            if (audioWebsocket && audioWebsocket.readyState === WebSocket.OPEN) {
+                appendMessage('Audio WebSocket already connected.', 'info');
+                return;
+            }
+
+            audioWebsocket = new WebSocket(`ws://localhost:8000/ws/voice_chat/${userId}`);
+            // audioWebsocket.binaryType = 'arraybuffer'; // Server sends JSON, not raw binary
+
+            audioWebsocket.onopen = () => {
+                appendMessage('Audio WebSocket connected.', 'info');
+                connectAudioButton.disabled = true;
+                disconnectAudioButton.disabled = false;
+                startButton.disabled = false;
+            };
+
+            audioWebsocket.onmessage = async (event) => {
+                const message = JSON.parse(event.data);
+                if (message.mime_type === "audio/pcm") {
+                    const audioData = base64ToArrayBuffer(message.data);
+                    audioQueue.push(audioData);
+                    if (!isPlaying) {
+                        playNextAudioChunk();
+                    }
+                } else if (message.mime_type === "text/plain") {
+                    appendMessage(`Agent (Voice): ${message.data}`, 'agent-message');
+                } else if (message.turn_complete || message.interrupted) {
+                    // Handle turn complete or interrupted signals if needed
+                    appendMessage(`Agent (Voice) signal: ${JSON.stringify(message)}`, 'info');
+                } else {
+                    appendMessage('Received unknown data from Audio WebSocket.', 'error');
+                }
+            };
+
+            audioWebsocket.onclose = () => {
+                appendMessage('Audio WebSocket disconnected.', 'info');
+                connectAudioButton.disabled = false;
+                disconnectAudioButton.disabled = true;
+                startButton.disabled = true;
+                stopButton.disabled = true;
+                isPlaying = false;
+                audioQueue = [];
+                if (audioContext) {
+                    audioContext.close();
+                }
+            };
+
+            audioWebsocket.onerror = (error) => {
+                appendMessage('Audio WebSocket error: ' + error.message, 'error');
+            };
+        };
+
+        disconnectAudioButton.onclick = () => {
+            if (audioWebsocket) {
+                audioWebsocket.close();
+            }
+        };
+
+        startButton.onclick = async () => {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sampleRate });
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: sampleRate } });
+                audioInput = audioContext.createMediaStreamSource(stream);
+
+                // Create a ScriptProcessorNode to process audio chunks
+                processor = audioContext.createScriptProcessor(bufferSize, 1, 1); // 1 input channel, 1 output channel (mono)
+
+                processor.onaudioprocess = (event) => {
+                    const inputBuffer = event.inputBuffer.getChannelData(0); // Get mono channel
+                    const pcm16 = floatTo16BitPCM(inputBuffer); // Convert to 16-bit PCM
+
+                    if (audioWebsocket && audioWebsocket.readyState === WebSocket.OPEN) {
+                        const base64Audio = arrayBufferToBase64(pcm16);
+                        const message = {
+                            mime_type: "audio/pcm",
+                            data: base64Audio
+                        };
+                        audioWebsocket.send(JSON.stringify(message));
+                    }
+                };
+
+                audioInput.connect(processor);
+                processor.connect(audioContext.destination); // Connect to destination to keep it alive
+
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                appendMessage('Streaming audio started...', 'info');
+            } catch (e) {
+                appendMessage('Error starting audio stream: ' + e.message, 'error');
+            }
+        };
+
+        stopButton.onclick = () => {
+            if (processor) {
+                processor.disconnect();
+                audioInput.disconnect();
+                // Signal end of stream to server (send a text message for now)
+                if (audioWebsocket && audioWebsocket.readyState === WebSocket.OPEN) {
+                    const message = {
+                        mime_type: "text/plain",
+                        data: "END_STREAM"
+                    };
+                    audioWebsocket.send(JSON.stringify(message));
+                }
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                appendMessage('Streaming audio stopped.', 'info');
+            }
+        };
+
+        async function playNextAudioChunk() {
+            if (audioQueue.length > 0 && !isPlaying) {
+                isPlaying = true;
+                const audioBytes = audioQueue.shift();
+                try {
+                    // Decode raw PCM audio (assuming LINEAR16 from server)
+                    // Need to create an AudioBuffer from raw PCM
+                    const audioBuffer = audioContext.createBuffer(1, audioBytes.byteLength / 2, sampleRate);
+                    const nowBuffering = audioBuffer.getChannelData(0);
+                    const pcm16 = new Int16Array(audioBytes);
+
+                    for (let i = 0; i < pcm16.length; i++) {
+                        nowBuffering[i] = pcm16[i] / 32768; // Convert 16-bit PCM to float32
+                    }
+
+                    const source = audioContext.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(audioContext.destination);
+                    source.onended = () => {
+                        isPlaying = false;
+                        playNextAudioChunk(); // Play next chunk when current one finishes
+                    };
+                    source.start(0);
+                } catch (e) {
+                    appendMessage('Error playing audio: ' + e.message, 'error');
+                    isPlaying = false;
+                    playNextAudioChunk(); // Try next chunk even if this one failed
+                }
+            }
+        }
+    </script>
+</body>
+</html>

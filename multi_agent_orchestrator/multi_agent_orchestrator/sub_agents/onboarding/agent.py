@@ -10,7 +10,7 @@ from .prompt import ONBOARDING_PROMPT
 
 onboarding_agent = LlmAgent(
     name="OnboardingAgent",
-    model="gemini-2.0-flash",
+    model="gemini-2.0-flash-exp-image-generation",
     description="Handles user onboarding.",
     instruction=ONBOARDING_PROMPT,
     tools=[

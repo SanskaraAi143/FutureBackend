@@ -8,13 +8,13 @@ from ..shared_libraries.helpers import execute_supabase_sql # Relative import
 # Configure logging for this module
 logger = logging.getLogger(__name__)
 
-async def get_user_id(email: str, context: ToolContext) -> Dict[str, Any]:
+async def get_user_id(email: str, tool_context: ToolContext) -> Dict[str, Any]:
     """
     Retrieves the user_id for a given email from the users table.
 
     Args:
         email (str): The user's email address. Must be a non-empty string.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any]:
@@ -32,7 +32,7 @@ async def get_user_id(email: str, context: ToolContext) -> Dict[str, Any]:
 
     Example Usage:
         ```python
-        user_info = await get_user_id("test@example.com", context)
+        user_info = await get_user_id("test@example.com", tool_context)
         if user_info["status"] == "success":
             user_id = user_info["data"]["user_id"]
             print(f"User ID: {user_id}")
@@ -45,7 +45,7 @@ async def get_user_id(email: str, context: ToolContext) -> Dict[str, Any]:
         return {"status": "error", "error": "Invalid email provided. Email must be a non-empty string."}
 
     # Check cache first
-    cached_user_id = context.state.get(f"user_id_by_email:{email}")
+    cached_user_id = tool_context.state.get(f"user_id_by_email:{email}")
     if cached_user_id:
         logger.info(f"get_user_id: Returning cached user_id for email: {email}")
         return {"status": "success", "data": {"user_id": cached_user_id}}
@@ -70,7 +70,7 @@ async def get_user_id(email: str, context: ToolContext) -> Dict[str, Any]:
 
         if user_data and "user_id" in user_data:
             user_id = user_data["user_id"]
-            context.state[f"user_id_by_email:{email}"] = user_id # Cache the result
+            tool_context.state[f"user_id_by_email:{email}"] = user_id # Cache the result
             logger.info(f"get_user_id: Successfully found user_id for email {email}. Cached.")
             return {"status": "success", "data": {"user_id": user_id}}
         else:
@@ -82,13 +82,13 @@ async def get_user_id(email: str, context: ToolContext) -> Dict[str, Any]:
         return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
 
-async def get_user_data(user_id: str, context: ToolContext) -> Dict[str, Any]:
+async def get_user_data(user_id: str, tool_context: ToolContext) -> Dict[str, Any]:
     """
     Retrieves all user data for a given user_id from the users table.
 
     Args:
         user_id (str): The user's UUID. Must be a non-empty string.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any>:
@@ -106,7 +106,7 @@ async def get_user_data(user_id: str, context: ToolContext) -> Dict[str, Any]:
 
     Example Usage:
         ```python
-        user_details = await get_user_data("some-uuid-string", context)
+        user_details = await get_user_data("some-uuid-string", tool_context)
         if user_details["status"] == "success":
             print(f"User data: {user_details['data']}")
         else:
@@ -118,7 +118,7 @@ async def get_user_data(user_id: str, context: ToolContext) -> Dict[str, Any]:
         return {"status": "error", "error": "Invalid user_id provided. User ID must be a non-empty string."}
 
     # Check cache first
-    cached_user_data = context.state.get(f"user_data:{user_id}")
+    cached_user_data = tool_context.state.get(f"user_data:{user_id}")
     if cached_user_data:
         logger.info(f"get_user_data: Returning cached user data for user_id: {user_id}")
         return {"status": "success", "data": cached_user_data}
@@ -142,7 +142,7 @@ async def get_user_data(user_id: str, context: ToolContext) -> Dict[str, Any]:
             user_data_dict = result
 
         if user_data_dict:
-            context.state[f"user_data:{user_id}"] = user_data_dict # Cache the result
+            tool_context.state[f"user_data:{user_id}"] = user_data_dict # Cache the result
             logger.info(f"get_user_data: Successfully retrieved data for user_id {user_id}. Cached.")
             return {"status": "success", "data": user_data_dict}
         else:
@@ -154,7 +154,7 @@ async def get_user_data(user_id: str, context: ToolContext) -> Dict[str, Any]:
         return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
 
-async def update_user_data(user_id: str, data: Dict[str, Any], context: ToolContext) -> Dict[str, Any]:
+async def update_user_data(user_id: str, data: Dict[str, Any], tool_context: ToolContext) -> Dict[str, Any]:
     """
     Updates user data for a given user_id.
     Specific columns are updated directly; other fields are merged into the 'preferences' JSONB column.
@@ -165,7 +165,7 @@ async def update_user_data(user_id: str, data: Dict[str, Any], context: ToolCont
         data (Dict[str, Any]): A dictionary of fields to update.
                                Keys matching allowed columns update those columns.
                                Other keys are added/updated within the 'preferences' field.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any>:
@@ -185,7 +185,7 @@ async def update_user_data(user_id: str, data: Dict[str, Any], context: ToolCont
     Example Usage:
         ```python
         update_payload = {"display_name": "New Name", "custom_pref": "value1"}
-        response = await update_user_data("some-uuid", update_payload, context)
+        response = await update_user_data("some-uuid", update_payload, tool_context)
         if response["status"] == "success":
             print("User updated:", response["data"])
         else:
@@ -225,7 +225,7 @@ async def update_user_data(user_id: str, data: Dict[str, Any], context: ToolCont
     try:
         if preferences_to_merge:
             # Pass context to get_user_data for potential caching benefits
-            current_user_response = await get_user_data(user_id, context)
+            current_user_response = await get_user_data(user_id, tool_context)
             if current_user_response["status"] == "success":
                 current_prefs = current_user_response["data"].get("preferences", {})
                 if not isinstance(current_prefs, dict):
@@ -271,10 +271,10 @@ async def update_user_data(user_id: str, data: Dict[str, Any], context: ToolCont
 
         if updated_data:
             # Invalidate cache after update
-            if f"user_data:{user_id}" in context.state:
-                del context.state[f"user_data:{user_id}"]
-            if f"user_id_by_email:{updated_data.get('email')}" in context.state:
-                del context.state[f"user_id_by_email:{updated_data.get('email')}"]
+            if f"user_data:{user_id}" in tool_context.state:
+                del tool_context.state[f"user_data:{user_id}"]
+            if f"user_id_by_email:{updated_data.get('email')}" in tool_context.state:
+                del tool_context.state[f"user_id_by_email:{updated_data.get('email')}"]
 
             logger.info(f"update_user_data: Successfully updated data for user_id {user_id}. Cache invalidated.")
             return {"status": "success", "data": updated_data}
@@ -287,13 +287,13 @@ async def update_user_data(user_id: str, data: Dict[str, Any], context: ToolCont
         return {"status": "error", "error": f"An unexpected error occurred: {str(e)}"}
 
 
-async def get_user_activities(user_id: str, context: ToolContext) -> Dict[str, Any]:
+async def get_user_activities(user_id: str, tool_context: ToolContext) -> Dict[str, Any]:
     """
     Retrieves all user activities (chat messages) for a given user, ordered by timestamp.
 
     Args:
         user_id (str): The user's UUID. Must be a non-empty string.
-        context (ToolContext): The ADK ToolContext for state management.
+        tool_context (ToolContext): The ADK ToolContext for state management.
 
     Returns:
         Dict[str, Any>:
@@ -311,7 +311,7 @@ async def get_user_activities(user_id: str, context: ToolContext) -> Dict[str, A
 
     Example Usage:
         ```python
-        activities_response = await get_user_activities("some-uuid", context)
+        activities_response = await get_user_activities("some-uuid", tool_context)
         if activities_response["status"] == "success":
             for activity in activities_response["data"]:
                 print(activity)

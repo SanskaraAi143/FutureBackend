@@ -1,8 +1,9 @@
 google-adk
 litellm
 python-dotenv
-uvicorn
+uvicorn[standard]
 fastapi
+websockets
 sqlalchemy
 psycopg2-binary
 asyncpg

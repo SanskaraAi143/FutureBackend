@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # For now, it will be an empty list or commented out.
 root_agent = LlmAgent(
     name="OrchestratorAgent", # Renamed from RootAgent
-    model="gemini-2.0-flash",
+    model="gemini-2.0-flash-exp-image-generation",
     description="Orchestrates the entire user workflow for Sanskara AI, including onboarding, ritual search, budget management, and vendor search. The user only interacts with this agent.",
     instruction=ORCHESTRATOR_PROMPT,
     sub_agents=[

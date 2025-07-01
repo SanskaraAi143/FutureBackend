@@ -12,7 +12,7 @@ from ...tools import (
 
 budget_agent = LlmAgent(
     name="BudgetAgent",
-    model="gemini-2.0-flash",
+    model="gemini-2.0-flash-exp-image-generation",
     description="Handles budget management.",
     instruction=BUDGET_PROMPT,
     tools=[

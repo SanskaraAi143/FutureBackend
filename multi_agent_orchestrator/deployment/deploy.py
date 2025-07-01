@@ -4,6 +4,19 @@ import uvicorn
 from fastapi import FastAPI
 from google.adk.cli.fast_api import get_fast_api_app
 import json
+import google.generativeai as genai # Corrected import
+from google.genai.types import Content,Part,Blob
+from google.adk.runners import Runner, InMemoryRunner
+from google.adk.sessions import InMemorySessionService
+from google.adk.agents import Agent, LiveRequestQueue
+from google.adk.agents.run_config import RunConfig
+
+from fastapi import WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+import asyncio
+import base64
+from multi_agent_orchestrator.agent import root_agent # Import the main orchestrator agent
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -68,7 +81,7 @@ try:
         agents_dir=AGENT_DIR, # Points to 'multi_agent_orchestrator'
         session_service_uri=SESSION_DB_URL,
         allow_origins=ALLOWED_ORIGINS,
-        web=SERVE_WEB_INTERFACE,
+        web=False, # Disable ADK's default web interface to serve custom client at root
     )
     logging.info("FastAPI app initialized successfully.")
 
@@ -94,14 +107,9 @@ if app: # Only if app was initialized (or is the dummy error app)
 
     # Initialize Gemini Live API clients
     # Assuming API key is available via environment variables or similar
-    # For actual implementation, refer to google.generativeai documentation for client setup
-    # and streaming STT/TTS. This is a placeholder structure.
-
-    # Initialize Gemini Live API clients
-    # Assuming API key is available via environment variables or similar
-    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-    stt_model = genai.get_default_speech_model()
-    tts_model = genai.get_default_text_to_speech_model()
+    genai.configure(api_key=os.getenv("GOOGLE_API_KEY")) # Corrected API key setting
+    # stt_model = genai.get_default_speech_model() # Not used for text chat
+    # tts_model = genai.get_default_text_to_speech_model() # Not used for text chat
 
     # Configure ADK Runner for the root_agent
     # Using InMemorySessionService for simplicity in this example.
@@ -109,119 +117,161 @@ if app: # Only if app was initialized (or is the dummy error app)
     session_service = InMemorySessionService()
     adk_runner = Runner(
         agent=root_agent,
-        app_name="sanskara_ai_voice_orchestrator", # A unique app name for this runner
+        app_name="sanskara_ai_orchestrator", # A unique app name for this runner
         session_service=session_service
     )
-    logging.info("ADK Runner initialized for voice orchestration.")
+    logging.info("ADK Runner initialized for orchestration.")
 
     @app.websocket("/ws/voice_chat/{user_id}")
     async def websocket_endpoint(websocket: WebSocket, user_id: str):
         await websocket.accept()
         logging.info(f"WebSocket accepted for user: {user_id}")
 
-        session_id = f"{user_id}_session"  # Generate a unique session ID for the user
-        await session_service.create_session(app_name=adk_runner.app_name,user_id= user_id,session_id= session_id)
-        logging.info(f"ADK session created for user {user_id}: {session_id}")
+        # Create a Runner for the voice session
+        voice_runner = InMemoryRunner(
+            app_name="sanskara_ai_voice_orchestrator",
+            agent=root_agent,
+        )
 
-        # Queues for inter-task communication
-        client_audio_queue = asyncio.Queue()
-        agent_text_queue = asyncio.Queue()
+        # Create a Session
+        session = await voice_runner.session_service.create_session(
+            app_name="sanskara_ai_voice_orchestrator",
+            user_id=user_id,
+        )
 
-        async def client_to_agent_messaging():
-            try:
-                # Gemini Live STT streaming
-                # The STT client would then yield transcripts.
-                
-                # For demonstration, we'll simulate a transcript after receiving some audio.
-                while True:
-                    audio_chunk = await client_audio_queue.get()
-                    if audio_chunk is None: # Signal to close the stream
-                        break
-                    
-                    logging.debug(f"Received audio chunk for STT (size: {len(audio_chunk)} bytes)")
-                    
-                    # This part needs to be replaced with actual Gemini Live STT integration
-                    # Assuming stt_model.generate_content takes audio bytes and streams text
-                    stt_response_stream = stt_model.generate_content(types.Part(mime_type="audio/wav", data=audio_chunk), stream=True)
-                    
-                    transcript = ""
-                    for chunk in stt_response_stream:
-                        if chunk.text:
-                            transcript += chunk.text
-                            if chunk.is_final: # Assuming is_final indicates a complete utterance
-                                logging.info(f"Final transcript from STT: {transcript}")
-                                user_message = types.Content(role='user', parts=[types.Part(text=transcript)])
-                                async for event in adk_runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message):
-                                    if event.is_final_response():
-                                        if event.content and event.content.parts:
-                                            agent_text_queue.put_nowait(event.content.parts[0].text)
-                                            logging.info(f"Agent final response sent to TTS queue: {event.content.parts[0].text}")
-                                        break
-                                    elif event.actions and event.actions.escalate:
-                                        logging.warning(f"Agent escalated: {getattr(event, 'error_message', 'No specific error message provided.')}")
-                                        agent_text_queue.put_nowait("I'm sorry, I encountered an issue and need to escalate.")
-                                        break
-                                transcript = "" # Reset for next utterance
-            except Exception as e:
-                logging.error(f"Error in client_to_agent_messaging: {e}", exc_info=True)
-            finally:
-                await client_audio_queue.put(None) # Signal generator to stop
+        # Set response modality to AUDIO
+        run_config = RunConfig(response_modalities=["AUDIO"])
+
+        # Create a LiveRequestQueue for this session
+        live_request_queue = LiveRequestQueue()
+
+        # Start agent session
+        live_events = voice_runner.run_live(
+            session=session,
+            live_request_queue=live_request_queue,
+            run_config=run_config,
+        )
 
         async def agent_to_client_messaging():
             try:
-                while True:
-                    text_to_speak = await agent_text_queue.get()
-                    if text_to_speak is None: # Signal to close the stream
-                        break
+                async for event in live_events:
+                    if event.turn_complete or event.interrupted:
+                        message = {
+                            "turn_complete": event.turn_complete,
+                            "interrupted": event.interrupted,
+                        }
+                        await websocket.send_text(json.dumps(message))
+                        logging.info(f"[AGENT TO CLIENT]: {message}")
+                        continue
 
-                    # Gemini Live TTS synthesis
-                    logging.debug(f"Requesting TTS for text: {text_to_speak[:30]}...")
-                    
-                    # Assuming tts_model.generate_content takes text and streams audio bytes
-                    tts_response_stream = tts_model.generate_content(text_to_speak, stream=True)
-                    
-                    for chunk in tts_response_stream:
-                        if chunk.audio:
-                            audio_content = chunk.audio.data
-                            if audio_content:
-                                # Send audio bytes back to client (Base64 encoded)
-                                await websocket.send_text(base64.b64encode(audio_content).decode('utf-8'))
-                                logging.info(f"Sent audio chunk to client for text: {text_to_speak[:30]}...")
+                    part: Part = (
+                        event.content and event.content.parts and event.content.parts[0]
+                    )
+                    if not part:
+                        continue
 
+                    is_audio = part.inline_data and part.inline_data.mime_type.startswith("audio/pcm")
+                    if is_audio:
+                        audio_data = part.inline_data and part.inline_data.data
+                        if audio_data:
+                            message = {
+                                "mime_type": "audio/pcm",
+                                "data": base64.b64encode(audio_data).decode("ascii")
+                            }
+                            await websocket.send_text(json.dumps(message))
+                            logging.info(f"[AGENT TO CLIENT]: audio/pcm: {len(audio_data)} bytes.")
+                            continue
+
+                    if part.text and event.partial:
+                        message = {
+                            "mime_type": "text/plain",
+                            "data": part.text
+                        }
+                        await websocket.send_text(json.dumps(message))
+                        logging.info(f"[AGENT TO CLIENT]: text/plain: {message}")
             except Exception as e:
                 logging.error(f"Error in agent_to_client_messaging: {e}", exc_info=True)
+
+        async def client_to_agent_messaging():
+            try:
+                while True:
+                    message_json = await websocket.receive_text()
+                    message = json.loads(message_json)
+                    mime_type = message["mime_type"]
+                    data = message["data"]
+
+                    if mime_type == "text/plain":
+                        content = Content(role="user", parts=[Part.from_text(text=data)])
+                        live_request_queue.send_content(content=content)
+                        logging.info(f"[CLIENT TO AGENT]: {data}")
+                    elif mime_type == "audio/pcm":
+                        decoded_data = base64.b64decode(data)
+                        live_request_queue.send_realtime(Blob(data=decoded_data, mime_type=mime_type))
+                        logging.info(f"[CLIENT TO AGENT]: audio/pcm: {len(decoded_data)} bytes.")
+                    else:
+                        raise ValueError(f"Mime type not supported: {mime_type}")
+            except WebSocketDisconnect:
+                logging.info(f"WebSocket disconnected for user: {user_id}")
+            except Exception as e:
+                logging.error(f"Error receiving from WebSocket for user {user_id}: {e}", exc_info=True)
             finally:
-                logging.info("agent_to_client_messaging task finished.")
+                live_request_queue.close()
+                logging.info(f"WebSocket connection closed and tasks cleaned up for user: {user_id}")
 
+        agent_to_client_task = asyncio.create_task(agent_to_client_messaging())
+        client_to_agent_task = asyncio.create_task(client_to_agent_messaging())
 
-        # Start the background tasks
-        producer_task = asyncio.create_task(client_to_agent_messaging())
-        consumer_task = asyncio.create_task(agent_to_client_messaging())
+        await asyncio.gather(agent_to_client_task, client_to_agent_task)
+
+    @app.websocket("/ws/text_chat/{user_id}")
+    async def text_websocket_endpoint(websocket: WebSocket, user_id: str):
+        await websocket.accept()
+        logging.info(f"Text WebSocket accepted for user: {user_id}")
+
+        session_id = f"{user_id}_text_session"  # Unique session ID for text chat
+        await session_service.create_session(app_name=adk_runner.app_name, user_id=user_id, session_id=session_id)
+        logging.info(f"ADK text session created for user {user_id}: {session_id}")
 
         try:
             while True:
-                # Receive audio chunks from the client
-                message = await websocket.receive_bytes()
-                if message == b"END_STREAM": # Client signals end of audio stream
-                    await client_audio_queue.put(None)
-                    logging.info("Client signaled end of audio stream.")
-                    break # Exit loop, allowing tasks to complete
+                message = await websocket.receive_text()
+                logging.info(f"Received text message from {user_id}: {message}")
                 
-                # Assuming client sends raw audio bytes
-                audio_bytes = message
-                await client_audio_queue.put(audio_bytes)
+                user_message = Content(role='user', parts=[Part(text=message)])
+                adk_generator = adk_runner.run_async(user_id=user_id, session_id=session_id, new_message=user_message)
+                try:
+                    async for event in adk_generator:
+                        if event.is_final_response():
+                            if event.content and event.content.parts:
+                                agent_response = event.content.parts[0].text
+                                await websocket.send_text(agent_response)
+                                logging.info(f"Sent text response to {user_id}: {agent_response}")
+                            break
+                        elif event.actions and event.actions.escalate:
+                            logging.warning(f"Agent escalated: {getattr(event, 'error_message', 'No specific error message provided.')}")
+                            await websocket.send_text("I'm sorry, I encountered an issue and need to escalate.")
+                            break
+                finally:
+                    # Explicitly close the generator if it hasn't been exhausted
+                    if hasattr(adk_generator, 'aclose'):
+                        await adk_generator.aclose()
+                    elif hasattr(adk_generator, 'close'):
+                        adk_generator.close()
 
         except WebSocketDisconnect:
-            logging.info(f"WebSocket disconnected for user: {user_id}")
+            logging.info(f"Text WebSocket disconnected for user: {user_id}")
         except Exception as e:
-            logging.error(f"Error receiving from WebSocket for user {user_id}: {e}", exc_info=True)
+            logging.error(f"Error in text WebSocket for user {user_id}: {e}", exc_info=True)
         finally:
-            # Ensure tasks are cancelled/cleaned up
-            producer_task.cancel()
-            consumer_task.cancel()
-            await asyncio.gather(producer_task, consumer_task, return_exceptions=True) # Wait for tasks to finish cancelling
-            logging.info(f"WebSocket connection closed and tasks cleaned up for user: {user_id}")
+            logging.info(f"Text WebSocket connection closed for user: {user_id}")
 
+    # Serve static files for the custom WebSocket client
+    app.mount("/client", StaticFiles(directory=os.path.join(AGENT_DIR, "client/custom_ws_client")), name="client")
+
+    @app.get("/")
+    async def get_custom_client():
+        with open(os.path.join(AGENT_DIR, "client/custom_ws_client/index.html")) as f:
+            return HTMLResponse(f.read())
 
     # This allows running the app directly using: python multi_agent_orchestrator/deploy.py
     # The CWD should ideally be the repository root for consistent relative path handling (e.g. for .env, sessions.db)
